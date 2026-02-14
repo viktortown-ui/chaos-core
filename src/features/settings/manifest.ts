@@ -4,6 +4,6 @@ import { SettingsScreen } from './ui/SettingsScreen';
 export const settingsManifest: ContainerManifest = {
   id: 'settings',
   route: '/settings',
-  title: 'Settings',
+  titleKey: 'navSettings',
   component: SettingsScreen
 };

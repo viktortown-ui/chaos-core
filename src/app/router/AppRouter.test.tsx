@@ -23,21 +23,21 @@ describe('onboarding route gating', () => {
 
   it('shows onboarding when onboarding is not completed', () => {
     renderRouter('/');
-    expect(screen.getByText('Choose your Path')).toBeInTheDocument();
+    expect(screen.getByText('Выберите путь')).toBeInTheDocument();
   });
 
   it('does not show onboarding after completion', async () => {
     renderRouter('/');
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Warrior' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Strength' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Start' }));
+    await user.click(screen.getByRole('button', { name: 'Воин' }));
+    await user.click(screen.getByRole('button', { name: 'Далее' }));
+    await user.click(screen.getByRole('button', { name: 'Сила' }));
+    await user.click(screen.getByRole('button', { name: 'Далее' }));
+    await user.click(screen.getByRole('button', { name: 'Старт' }));
 
-    expect(screen.queryByText('Choose your Path')).not.toBeInTheDocument();
-    expect(screen.getByText('Core initialized')).toBeInTheDocument();
+    expect(screen.queryByText('Выберите путь')).not.toBeInTheDocument();
+    expect(screen.getByText('Ядро инициализировано')).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}').onboarding.completedAt).toBeTruthy();
   });
 });

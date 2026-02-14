@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { CoreDataV2, PathKey, StatKey } from '../../core/types';
+import { t } from '../../shared/i18n';
 import { loadCoreData, saveCoreData } from '../../core/storage';
 
 interface ChaosCoreContextValue {
@@ -34,7 +35,7 @@ export function ChaosCoreProvider({ children }: { children: ReactNode }) {
         focusStat
       }
     }));
-    setToastMessage('Core initialized');
+    setToastMessage(t('toastCoreInitialized', data.settings.language));
   };
 
   return (

@@ -21,7 +21,7 @@ describe('SettingsScreen demo data', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Load demo data' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Загрузить демо-данные' }));
 
     const saved = JSON.parse(localStorage.getItem('chaos-core:v1') ?? '{}');
     expect(saved.xp).toBe(120);

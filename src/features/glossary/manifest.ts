@@ -4,7 +4,7 @@ import { GlossaryScreen } from './ui/GlossaryScreen';
 export const glossaryManifest: ContainerManifest = {
   id: 'glossary',
   route: '/glossary',
-  title: 'Glossary',
+  titleKey: 'navGlossary',
   component: GlossaryScreen,
   showInNav: false
 };

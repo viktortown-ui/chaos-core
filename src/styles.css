@@ -49,22 +49,13 @@ button {
 button:disabled { opacity: 0.6; }
 
 .core-sphere-wrap { text-align: center; }
-.core-sphere {
-  width: 140px;
-  height: 140px;
+.core-sphere-wrap canvas {
+  display: block;
   margin: 0 auto 0.8rem;
   border-radius: 999px;
-  background: radial-gradient(circle at 30% 30%, #d8e8ff, #4574df 45%, #112a61 100%);
-  box-shadow: 0 0 30px rgba(110, 168, 254, 0.4);
-  animation: pulse 2.4s ease-in-out infinite;
+  background: radial-gradient(circle at 35% 30%, rgba(57, 96, 180, 0.5), rgba(17, 27, 50, 0.6));
+  box-shadow: 0 0 30px rgba(110, 168, 254, 0.25);
 }
-.core-sphere.still { animation: none; }
-
-@keyframes pulse {
-  0%,100% { transform: scale(1); box-shadow: 0 0 16px rgba(110, 168, 254, 0.25); }
-  50% { transform: scale(1.05); box-shadow: 0 0 36px rgba(110, 168, 254, 0.55); }
-}
-
 .bottombar {
   border-top: 1px solid var(--surface-2);
   display: grid;
@@ -146,7 +137,6 @@ button:disabled { opacity: 0.6; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .core-sphere,
   .onboarding {
     animation: none;
   }

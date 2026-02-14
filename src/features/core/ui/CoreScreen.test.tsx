@@ -18,19 +18,19 @@ function renderCore() {
 describe('CoreScreen', () => {
   it('renders primary stats', () => {
     renderCore();
-    expect(screen.getByText('Strength')).toBeInTheDocument();
-    expect(screen.getByText('Intelligence')).toBeInTheDocument();
-    expect(screen.getByText('Wisdom')).toBeInTheDocument();
-    expect(screen.getByText('Dexterity')).toBeInTheDocument();
+    expect(screen.getByText('Сила')).toBeInTheDocument();
+    expect(screen.getByText('Интеллект')).toBeInTheDocument();
+    expect(screen.getByText('Мудрость')).toBeInTheDocument();
+    expect(screen.getByText('Ловкость')).toBeInTheDocument();
   });
 
   it('updates xp after daily check-in', async () => {
     renderCore();
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Daily Check-in' }));
-    await user.click(screen.getByRole('button', { name: '+1 Strength' }));
+    await user.click(screen.getByRole('button', { name: 'Ежедневный чек-ин' }));
+    await user.click(screen.getByRole('button', { name: '+1 Сила' }));
 
-    expect(screen.getByText('XP: 10')).toBeInTheDocument();
+    expect(screen.getByText('Опыт: 10')).toBeInTheDocument();
   });
 });

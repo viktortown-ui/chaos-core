@@ -7,12 +7,14 @@ import { StatCard } from '../../../ui/StatCard';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 import { useReducedMotion } from '../../../fx/useReducedMotion';
 import { ModalDialog } from '../../../ui/ModalDialog';
+import { t } from '../../../shared/i18n';
+import { AtomicCore } from './AtomicCore';
 
-const statOptions: { key: StatKey; label: string }[] = [
-  { key: 'strength', label: 'Strength' },
-  { key: 'intelligence', label: 'Intelligence' },
-  { key: 'wisdom', label: 'Wisdom' },
-  { key: 'dexterity', label: 'Dexterity' }
+const statOptions: { key: StatKey; labelKey: 'statStrength' | 'statIntelligence' | 'statWisdom' | 'statDexterity' }[] = [
+  { key: 'strength', labelKey: 'statStrength' },
+  { key: 'intelligence', labelKey: 'statIntelligence' },
+  { key: 'wisdom', labelKey: 'statWisdom' },
+  { key: 'dexterity', labelKey: 'statDexterity' }
 ];
 
 export function CoreScreen() {
@@ -21,6 +23,7 @@ export function CoreScreen() {
   const canCheckIn = canCheckInToday(data.lastCheckInISO);
   const level = useMemo(() => xpToLevel(data.xp), [data.xp]);
   const reducedMotion = useReducedMotion(data.settings.reduceMotionOverride);
+  const language = data.settings.language;
 
   const runCheckIn = (stat: StatKey) => {
     setData((current) => applyDailyCheckIn(current, stat));
@@ -30,38 +33,38 @@ export function CoreScreen() {
   return (
     <section className="stack">
       <div className="row-actions">
-        <h2>Core</h2>
-        <Link to="/glossary" aria-label="Open glossary" className="help-link">
+        <h2>{t('coreTitle', language)}</h2>
+        <Link to="/glossary" aria-label={t('openGlossary', language)} className="help-link">
           ?
         </Link>
       </div>
       <div className="core-sphere-wrap">
-        <div className={`core-sphere ${reducedMotion ? 'still' : ''}`} />
-        <p>Level {level}</p>
-        <p>XP: {data.xp}</p>
+        <AtomicCore reducedMotion={reducedMotion} language={language} />
+        <p>{t('level', language)} {level}</p>
+        <p>{t('xp', language)}: {data.xp}</p>
       </div>
 
       <div className="grid-2">
         {statOptions.map((option) => (
-          <StatCard key={option.key} label={option.label} value={data.stats[option.key]} />
+          <StatCard key={option.key} label={t(option.labelKey, language)} value={data.stats[option.key]} />
         ))}
       </div>
 
       <button disabled={!canCheckIn} onClick={() => setModalOpen(true)}>
-        {canCheckIn ? 'Daily Check-in' : 'Already checked in today'}
+        {canCheckIn ? t('dailyCheckIn', language) : t('alreadyCheckedInToday', language)}
       </button>
 
       {isModalOpen && (
-        <ModalDialog title="Choose a stat to boost" onClose={() => setModalOpen(false)}>
-          <h2>Choose a stat to boost</h2>
+        <ModalDialog title={t('chooseStatToBoost', language)} onClose={() => setModalOpen(false)}>
+          <h2>{t('chooseStatToBoost', language)}</h2>
           <div className="stack">
             {statOptions.map((option) => (
               <button key={option.key} onClick={() => runCheckIn(option.key)}>
-                +1 {option.label}
+                +1 {t(option.labelKey, language)}
               </button>
             ))}
           </div>
-          <button onClick={() => setModalOpen(false)}>Cancel</button>
+          <button onClick={() => setModalOpen(false)}>{t('cancel', language)}</button>
         </ModalDialog>
       )}
     </section>

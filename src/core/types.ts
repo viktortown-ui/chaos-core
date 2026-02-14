@@ -11,9 +11,12 @@ export interface Stats {
   dexterity: number;
 }
 
+export type Language = 'ru' | 'en';
+
 export interface Settings {
   reduceMotionOverride: boolean | null;
   soundFxEnabled: boolean;
+  language: Language;
 }
 
 export interface OnboardingState {

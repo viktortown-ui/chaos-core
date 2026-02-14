@@ -4,6 +4,6 @@ import { QuestsScreen } from './ui/QuestsScreen';
 export const questsManifest: ContainerManifest = {
   id: 'quests',
   route: '/quests',
-  title: 'Quests',
+  titleKey: 'navQuests',
   component: QuestsScreen
 };

@@ -3,19 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { PathKey, StatKey } from '../../../core/types';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 import { useReducedMotion } from '../../../fx/useReducedMotion';
+import { t } from '../../../shared/i18n';
 
-const pathOptions: { value: PathKey; label: string }[] = [
-  { value: 'warrior', label: 'Warrior' },
-  { value: 'mage', label: 'Mage' },
-  { value: 'rogue', label: 'Rogue' },
-  { value: 'priest', label: 'Priest' }
+const pathOptions: { value: PathKey; labelKey: 'pathWarrior' | 'pathMage' | 'pathRogue' | 'pathPriest' }[] = [
+  { value: 'warrior', labelKey: 'pathWarrior' },
+  { value: 'mage', labelKey: 'pathMage' },
+  { value: 'rogue', labelKey: 'pathRogue' },
+  { value: 'priest', labelKey: 'pathPriest' }
 ];
 
-const statOptions: { value: StatKey; label: string }[] = [
-  { value: 'strength', label: 'Strength' },
-  { value: 'intelligence', label: 'Intellect' },
-  { value: 'wisdom', label: 'Wisdom' },
-  { value: 'dexterity', label: 'Dexterity' }
+const statOptions: { value: StatKey; labelKey: 'statStrength' | 'statIntelligence' | 'statWisdom' | 'statDexterity' }[] = [
+  { value: 'strength', labelKey: 'statStrength' },
+  { value: 'intelligence', labelKey: 'statIntelligence' },
+  { value: 'wisdom', labelKey: 'statWisdom' },
+  { value: 'dexterity', labelKey: 'statDexterity' }
 ];
 
 export function OnboardingScreen() {
@@ -25,11 +26,12 @@ export function OnboardingScreen() {
   const [focusStat, setFocusStat] = useState<StatKey | undefined>(data.profile.focusStat);
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion(data.settings.reduceMotionOverride);
+  const language = data.settings.language;
 
   const summary = useMemo(
     () => ({
-      path: pathOptions.find((option) => option.value === path)?.label ?? 'Not set',
-      focus: statOptions.find((option) => option.value === focusStat)?.label ?? 'Not set'
+      path: pathOptions.find((option) => option.value === path)?.labelKey,
+      focus: statOptions.find((option) => option.value === focusStat)?.labelKey
     }),
     [focusStat, path]
   );
@@ -41,20 +43,20 @@ export function OnboardingScreen() {
 
   return (
     <section className={`stack onboarding ${reducedMotion ? 'reduce-motion' : ''}`}>
-      <h2>Welcome to Chaos Core</h2>
+      <h2>{t('onboardingWelcome', language)}</h2>
 
       {step === 1 && (
         <div className="card stack">
-          <h3>Choose your Path</h3>
+          <h3>{t('onboardingChoosePath', language)}</h3>
           {pathOptions.map((option) => (
             <button key={option.value} className={path === option.value ? 'active-choice' : ''} onClick={() => setPath(option.value)}>
-              {option.label}
+              {t(option.labelKey, language)}
             </button>
           ))}
           <div className="row-actions">
-            <button onClick={finish}>Skip</button>
+            <button onClick={finish}>{t('skip', language)}</button>
             <button onClick={() => setStep(2)} disabled={!path}>
-              Next
+              {t('next', language)}
             </button>
           </div>
         </div>
@@ -62,20 +64,20 @@ export function OnboardingScreen() {
 
       {step === 2 && (
         <div className="card stack">
-          <h3>Pick 1 focus stat</h3>
+          <h3>{t('onboardingPickFocusStat', language)}</h3>
           {statOptions.map((option) => (
             <button
               key={option.value}
               className={focusStat === option.value ? 'active-choice' : ''}
               onClick={() => setFocusStat(option.value)}
             >
-              {option.label}
+              {t(option.labelKey, language)}
             </button>
           ))}
           <div className="row-actions">
-            <button onClick={finish}>Skip</button>
+            <button onClick={finish}>{t('skip', language)}</button>
             <button onClick={() => setStep(3)} disabled={!focusStat}>
-              Next
+              {t('next', language)}
             </button>
           </div>
         </div>
@@ -83,12 +85,12 @@ export function OnboardingScreen() {
 
       {step === 3 && (
         <div className="card stack">
-          <h3>Ready</h3>
-          <p>Path: {summary.path}</p>
-          <p>Focus stat: {summary.focus}</p>
+          <h3>{t('onboardingReady', language)}</h3>
+          <p>{t('path', language)}: {summary.path ? t(summary.path, language) : t('notSet', language)}</p>
+          <p>{t('focusStat', language)}: {summary.focus ? t(summary.focus, language) : t('notSet', language)}</p>
           <div className="row-actions">
-            <button onClick={finish}>Skip</button>
-            <button onClick={finish}>Start</button>
+            <button onClick={finish}>{t('skip', language)}</button>
+            <button onClick={finish}>{t('start', language)}</button>
           </div>
         </div>
       )}
