@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { containerRegistry } from '../../containers/registry';
+import { containerRegistry } from '../../features/registry';
 
 export function Layout() {
   return (

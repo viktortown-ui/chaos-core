@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from '../layout/Layout';
-import { containerRegistry } from '../../containers/registry';
+import { containerRegistry } from '../../features/registry';
 
 export function AppRouter() {
   return (

@@ -1,12 +1,12 @@
-# CODEX RULES
+# CODEX_RULES
 
-For future agents working on Chaos Core:
-
-1. Keep architecture boundaries strict:
-   - `src/core` has no React imports.
-   - `src/containers` houses feature modules (`ui/`, `model/`, `manifest.ts`).
-   - `src/app` is only routing/layout/providers.
-2. Run quality gates before finalizing: `npm ci`, `npm test`, `npm run build`.
-3. Keep changes small and intentional (PR-like slices).
-4. Do not rewrite unrelated files.
-5. Maintain English-only UI and documentation.
+1. Respect layer boundaries:
+   - `src/core` — only TypeScript domain logic (no React imports).
+   - `src/features/*` — isolated feature containers (UI + calls into core).
+   - `src/app/*` — routing/layout/providers only.
+2. Keep GitHub Pages pathing aligned:
+   - Vite `base` must resolve to `/<repo>/`.
+   - Router basename must use the same resolved base path.
+3. Keep lockfile committed (`package-lock.json`) and use `npm ci` in CI.
+4. Before finalizing, run quality gates: `npm test` and `npm run build`.
+5. Update docs + README when architecture or deployment flow changes.
