@@ -9,6 +9,8 @@ export function ProfileScreen() {
       <h2>Profile</h2>
       <p>Level: {xpToLevel(data.xp)}</p>
       <p>Total XP: {data.xp}</p>
+      <p>Path: {data.profile.path ?? 'Not set'}</p>
+      <p>Focus stat: {data.profile.focusStat ?? 'Not set'}</p>
       <p>Last check-in: {data.lastCheckInISO ? new Date(data.lastCheckInISO).toLocaleString() : 'Never'}</p>
     </section>
   );

@@ -14,3 +14,13 @@
 - **Decision:** Use `src/features/*` as isolated feature containers and keep `src/app/*` composition-only.
 - **Why:** Prevents domain/UI entanglement and keeps scaling path clear.
 - **Impact:** Routing/nav driven by feature registry, while domain rules remain centralized in `src/core`.
+
+## 2026-02-14 — Onboarding with progressive disclosure
+- **Decision:** Add a 3-step first-run onboarding flow (path selection, focus stat, ready summary) and gate main routes until completion.
+- **Why:** New users need immediate context and a single starting action without overwhelming UI density.
+- **Impact:** First-run clarity improves, onboarding completion is persisted, and a one-time initialization toast confirms success.
+
+## 2026-02-14 — Include deterministic demo data
+- **Decision:** Add a “Load demo data” control in Settings that seeds a predictable non-empty snapshot.
+- **Why:** Empty state slowed initial comprehension; seeded data communicates system shape within ~60 seconds.
+- **Impact:** Users can explore progression/history instantly and still clear data with reset controls.

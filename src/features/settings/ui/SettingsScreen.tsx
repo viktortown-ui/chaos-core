@@ -1,8 +1,10 @@
-import { defaultCoreData } from '../../../core/storage';
+import { Link, useNavigate } from 'react-router-dom';
+import { buildDemoData, defaultCoreData } from '../../../core/storage';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 
 export function SettingsScreen() {
   const { data, setData } = useChaosCore();
+  const navigate = useNavigate();
 
   return (
     <section className="stack">
@@ -41,14 +43,37 @@ export function SettingsScreen() {
         Sound FX (placeholder)
       </label>
 
+      <button onClick={() => setData(buildDemoData(new Date()))}>Load demo data</button>
       <button
         onClick={() => {
-          const shouldReset = window.confirm('Reset all local Chaos Core data?');
+          const shouldReset = window.confirm('Clear demo data and all local Chaos Core data?');
           if (shouldReset) setData(defaultCoreData);
         }}
       >
-        Reset local data
+        Clear demo data (reset local data)
       </button>
+
+      <button
+        onClick={() => {
+          const shouldReset = window.confirm('Clear history and progression before re-running onboarding?');
+          if (shouldReset) {
+            setData(defaultCoreData);
+          } else {
+            setData((current) => ({
+              ...current,
+              onboarding: {
+                ...current.onboarding,
+                completedAt: undefined
+              }
+            }));
+          }
+          navigate('/onboarding');
+        }}
+      >
+        Re-run onboarding
+      </button>
+
+      <Link to="/glossary">Open glossary / help</Link>
     </section>
   );
 }

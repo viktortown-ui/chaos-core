@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { applyDailyCheckIn, canCheckInToday } from '../../../core/storage';
 import { StatKey } from '../../../core/types';
 import { xpToLevel } from '../../../core/formulas';
 import { StatCard } from '../../../ui/StatCard';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 import { useReducedMotion } from '../../../fx/useReducedMotion';
+import { ModalDialog } from '../../../ui/ModalDialog';
 
 const statOptions: { key: StatKey; label: string }[] = [
   { key: 'strength', label: 'Strength' },
@@ -27,6 +29,12 @@ export function CoreScreen() {
 
   return (
     <section className="stack">
+      <div className="row-actions">
+        <h2>Core</h2>
+        <Link to="/glossary" aria-label="Open glossary" className="help-link">
+          ?
+        </Link>
+      </div>
       <div className="core-sphere-wrap">
         <div className={`core-sphere ${reducedMotion ? 'still' : ''}`} />
         <p>Level {level}</p>
@@ -44,7 +52,7 @@ export function CoreScreen() {
       </button>
 
       {isModalOpen && (
-        <dialog open className="modal">
+        <ModalDialog title="Choose a stat to boost" onClose={() => setModalOpen(false)}>
           <h2>Choose a stat to boost</h2>
           <div className="stack">
             {statOptions.map((option) => (
@@ -54,7 +62,7 @@ export function CoreScreen() {
             ))}
           </div>
           <button onClick={() => setModalOpen(false)}>Cancel</button>
-        </dialog>
+        </ModalDialog>
       )}
     </section>
   );
