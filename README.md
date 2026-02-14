@@ -1,48 +1,46 @@
 # Chaos Core
 
-Chaos Core is a focused, offline-friendly daily growth app with a simple core loop.
+Chaos Core is an offline-friendly daily growth app with a compact progression loop.
 
 ## Stack
 - Vite + React + TypeScript
 - React Router
-- Vitest + React Testing Library
-- ESLint
-- PWA via `vite-plugin-pwa`
+- Vitest + Testing Library
+- GitHub Pages deployment via GitHub Actions
 
-## Local development
+## Local setup
 ```bash
 npm ci
 npm run dev
 ```
 
-## Quality gate commands
+## Quality gates
 ```bash
-npm ci
 npm test
 npm run build
-npm run preview
 ```
 
-## Scripts
-- `npm run dev`
-- `npm run build`
-- `npm run preview`
-- `npm run test`
-- `npm run lint`
-- `npm run smoke:preview`
+## Architecture
+- `src/core`: pure TS domain logic (formulas/rules/storage).
+- `src/features/*`: isolated feature containers (UI + calls into core).
+- `src/app/*`: routing/layout/providers only.
 
-## Deploy to GitHub Pages
-1. Push this repository to GitHub under the `main` branch.
-2. In GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-3. Push to `main` to trigger `.github/workflows/pages.yml`.
-4. Open the generated Pages URL after deployment completes.
+## GitHub Pages deployment
+The project is configured for Pages project-path hosting:
+- Vite `base` resolves to `/<repo>/`.
+- React Router `basename` uses `import.meta.env.BASE_URL` (same value).
+- Workflow: `.github/workflows/pages.yml` (build + deploy to GitHub Pages).
 
-The app is preconfigured for Pages project path `/chaos-core/` via Vite `base` and React Router `basename`.
+### Steps
+1. Push to GitHub.
+2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
+3. Ensure default branch is `main` (or adjust workflow trigger).
+4. Push to `main` to trigger deployment.
 
 ## Docs
 - [Plan](docs/PLAN.md)
 - [Map](docs/MAP.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [UX Notes](docs/UX_NOTES.md)
-- [Codex Rules](docs/CODEX_RULES.md)
 - [Decisions](docs/DECISIONS.md)
+- [Codex Rules](docs/CODEX_RULES.md)
+- [UX Notes](docs/UX_NOTES.md)

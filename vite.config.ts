@@ -2,8 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const repositoryName = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'chaos-core';
+const repoBasePath = `/${repositoryName}/`;
+
 export default defineConfig({
-  base: '/chaos-core/',
+  base: repoBasePath,
   plugins: [
     react(),
     VitePWA({
@@ -16,16 +19,16 @@ export default defineConfig({
         theme_color: '#090b10',
         background_color: '#090b10',
         display: 'standalone',
-        start_url: '/chaos-core/',
-        scope: '/chaos-core/',
+        start_url: repoBasePath,
+        scope: repoBasePath,
         icons: [
           {
-            src: '/chaos-core/pwa-192.svg',
+            src: `${repoBasePath}pwa-192.svg`,
             sizes: '192x192',
             type: 'image/svg+xml'
           },
           {
-            src: '/chaos-core/pwa-512.svg',
+            src: `${repoBasePath}pwa-512.svg`,
             sizes: '512x512',
             type: 'image/svg+xml'
           }

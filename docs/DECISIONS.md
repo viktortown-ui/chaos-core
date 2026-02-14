@@ -1,16 +1,16 @@
 # DECISIONS
 
-## 2026-02-14 - Lockfile + CI install strategy
-- **Decision:** Keep GitHub Actions using `npm ci` and add committed `package-lock.json`.
-- **Why:** `npm ci` requires a lockfile and gives reproducible installs, which stabilizes CI and Pages builds.
-- **Impact:** Local and CI installs are deterministic.
+## 2026-02-14 — GitHub Pages path should be repo-aware
+- **Decision:** Compute Vite `base` as `/<repo>/` from `GITHUB_REPOSITORY` (fallback `chaos-core`), and bind React Router basename to `import.meta.env.BASE_URL`.
+- **Why:** Ensures consistent behavior on GitHub Pages across forks/renames without hand-editing path constants.
+- **Impact:** Build output URLs and router navigation stay aligned in local builds and Actions builds.
 
-## 2026-02-14 - App shell and container registry split
-- **Decision:** Move routing/layout/providers into `src/app` and introduce container manifests with `src/containers/registry.ts`.
-- **Why:** Enforces clean boundaries and creates a minimal module-registry extension point.
-- **Impact:** Route/nav configuration now flows from manifests instead of duplicated hardcoded lists.
+## 2026-02-14 — Keep lockfile under version control
+- **Decision:** Commit and maintain `package-lock.json`.
+- **Why:** Required for reliable `npm ci` and reproducible CI.
+- **Impact:** Deterministic dependency graph in local/CI environments.
 
-## 2026-02-14 - Storage migration behavior
-- **Decision:** `loadCoreData` migrates schema-less payloads into schema v1 and falls back to defaults for unsupported versions.
-- **Why:** Prevents user data loss for older/local experimental payloads while protecting against incompatible schema changes.
-- **Impact:** Storage behavior is now explicitly tested for fallback and migration.
+## 2026-02-14 — Feature-container architecture boundary
+- **Decision:** Use `src/features/*` as isolated feature containers and keep `src/app/*` composition-only.
+- **Why:** Prevents domain/UI entanglement and keeps scaling path clear.
+- **Impact:** Routing/nav driven by feature registry, while domain rules remain centralized in `src/core`.

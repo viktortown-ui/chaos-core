@@ -1,28 +1,22 @@
-# Architecture
+# ARCHITECTURE
 
-## Folder structure
-- `src/core`: pure domain logic and persistence behavior (`no React imports`).
-- `src/containers`: feature modules. Each container has `ui/`, `model/`, and `manifest.ts`.
-- `src/app`: app shell only (routing, layout, providers).
-- `src/ui`: shared presentational components.
-- `src/fx`: effects/hooks.
+## Layers
+- `src/core`: framework-agnostic TypeScript domain logic. No React imports.
+- `src/features/*`: isolated feature containers (UI + interactions with `src/core`).
+- `src/app/*`: composition layer only (routing, layout, providers).
 
-## Container registry pattern
-- Every container exports a manifest describing route metadata and the screen component.
-- `src/containers/registry.ts` is the single module registry consumed by app routing and nav.
-- New feature containers must register their manifest in the registry to become routable.
+## Feature registration
+- Each feature exports a manifest.
+- `src/features/registry.ts` is the single source of routable feature metadata.
+- App routing and navigation read from the registry to avoid duplicated route config.
 
 ## Data flow
-1. App boots in `src/main.tsx` and mounts app-shell providers and router.
-2. `ChaosCoreProvider` holds canonical app state.
-3. Containers dispatch user intent while domain transitions execute via `src/core` functions.
-4. State changes persist through storage helpers in `src/core/storage.ts`.
+1. App bootstraps in `src/main.tsx` with `BrowserRouter` basename aligned to Vite base.
+2. `ChaosCoreProvider` owns in-memory app state and invokes core-domain transitions.
+3. Feature UIs dispatch intents.
+4. Persistence is handled through `src/core/storage.ts`.
 
-## Persistence schema (`v1`)
-- `schemaVersion: 1`
-- `xp: number`
-- `stats: { strength, intelligence, wisdom, dexterity }`
-- `lastCheckInISO: string | null`
-- `settings: { reduceMotionOverride: boolean | null, soundFxEnabled: boolean }`
-
-Storage supports fallback to defaults and migration of schema-less payloads into `v1`.
+## Persistence schema policy
+- Current schema: `v1`.
+- Unsupported schema versions: fallback to defaults.
+- Schema-less legacy payloads: migrate forward to current schema with safe defaults.
