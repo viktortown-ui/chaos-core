@@ -37,7 +37,7 @@ main { padding: 1rem; max-width: 760px; width: 100%; margin: 0 auto; }
   border-radius: 12px;
   padding: 0.7rem;
 }
-.card p { font-size: 1.4rem; margin: 0.2rem 0 0; }
+.card p { font-size: 1rem; margin: 0.2rem 0 0; }
 
 button {
   color: var(--text);
@@ -83,12 +83,77 @@ button:disabled { opacity: 0.6; }
   background: var(--surface-2);
 }
 
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  justify-content: space-between;
+}
+
+.help-link {
+  border: 1px solid var(--surface-2);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 999px;
+  text-decoration: none;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+
 .modal {
   border: 1px solid var(--surface-2);
   border-radius: 12px;
   background: var(--surface);
   color: var(--text);
   width: min(92vw, 360px);
+  padding: 1rem;
+}
+
+.toast {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  background: #16345f;
+  border: 1px solid #265085;
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.onboarding {
+  animation: fadein 240ms ease-in;
+}
+.active-choice {
+  border-color: var(--accent);
+}
+
+@keyframes fadein {
+  from { opacity: 0.5; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core-sphere,
+  .onboarding {
+    animation: none;
+  }
+}
+
+.onboarding.reduce-motion {
+  animation: none;
 }
 
 @media (min-width: 768px) {

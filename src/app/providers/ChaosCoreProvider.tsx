@@ -1,22 +1,47 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
-import { CoreDataV1 } from '../../core/types';
+import { CoreDataV2, PathKey, StatKey } from '../../core/types';
 import { loadCoreData, saveCoreData } from '../../core/storage';
 
 interface ChaosCoreContextValue {
-  data: CoreDataV1;
-  setData: React.Dispatch<React.SetStateAction<CoreDataV1>>;
+  data: CoreDataV2;
+  setData: React.Dispatch<React.SetStateAction<CoreDataV2>>;
+  toastMessage: string | null;
+  clearToast: () => void;
+  completeOnboarding: (path?: PathKey, focusStat?: StatKey) => void;
 }
 
 const ChaosCoreContext = createContext<ChaosCoreContextValue | undefined>(undefined);
 
 export function ChaosCoreProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<CoreDataV1>(() => loadCoreData());
+  const [data, setData] = useState<CoreDataV2>(() => loadCoreData());
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     saveCoreData(data);
   }, [data]);
 
-  return <ChaosCoreContext.Provider value={{ data, setData }}>{children}</ChaosCoreContext.Provider>;
+  const completeOnboarding = (path?: PathKey, focusStat?: StatKey) => {
+    setData((current) => ({
+      ...current,
+      onboarding: {
+        ...current.onboarding,
+        completedAt: new Date().toISOString(),
+        version: 1
+      },
+      profile: {
+        ...current.profile,
+        path,
+        focusStat
+      }
+    }));
+    setToastMessage('Core initialized');
+  };
+
+  return (
+    <ChaosCoreContext.Provider value={{ data, setData, toastMessage, clearToast: () => setToastMessage(null), completeOnboarding }}>
+      {children}
+    </ChaosCoreContext.Provider>
+  );
 }
 
 export function useChaosCore(): ChaosCoreContextValue {

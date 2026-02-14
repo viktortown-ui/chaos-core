@@ -1,5 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { applyDailyCheckIn, canCheckInToday, defaultCoreData, loadCoreData, saveCoreData } from './storage';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  applyDailyCheckIn,
+  buildDemoData,
+  canCheckInToday,
+  defaultCoreData,
+  loadCoreData,
+  saveCoreData
+} from './storage';
 import { STORAGE_KEY } from './types';
 
 describe('storage', () => {
@@ -18,7 +25,7 @@ describe('storage', () => {
     expect(loadCoreData()).toEqual(defaultCoreData);
   });
 
-  it('migrates schema-less payloads to current schema', () => {
+  it('migrates schema-less payloads safely', () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -29,10 +36,51 @@ describe('storage', () => {
     );
 
     const migrated = loadCoreData();
-    expect(migrated.schemaVersion).toBe(1);
+    expect(migrated.schemaVersion).toBe(2);
     expect(migrated.xp).toBe(50);
     expect(migrated.stats.strength).toBe(3);
     expect(migrated.settings.soundFxEnabled).toBe(false);
+    expect(migrated.onboarding.completedAt).toBeUndefined();
+    expect(migrated.profile.path).toBeUndefined();
+  });
+
+  it('migrates old schema payloads and preserves existing core values', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        schemaVersion: 1,
+        xp: 80,
+        stats: { dexterity: 6 },
+        lastCheckInISO: '2026-02-10T08:00:00.000Z',
+        settings: { reduceMotionOverride: true, soundFxEnabled: true }
+      })
+    );
+
+    const migrated = loadCoreData();
+    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.xp).toBe(80);
+    expect(migrated.stats.dexterity).toBe(6);
+    expect(migrated.lastCheckInISO).toBe('2026-02-10T08:00:00.000Z');
+    expect(migrated.settings.reduceMotionOverride).toBe(true);
+    expect(migrated.onboarding.version).toBe(1);
+  });
+
+  it('builds deterministic demo data snapshot', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-14T09:00:00.000Z'));
+    const demo = buildDemoData(new Date());
+
+    expect(demo.xp).toBe(120);
+    expect(demo.stats).toEqual({
+      strength: 8,
+      intelligence: 4,
+      wisdom: 3,
+      dexterity: 5
+    });
+    expect(demo.lastCheckInISO).toBe('2026-02-13T09:00:00.000Z');
+    expect(demo.history).toHaveLength(3);
+
+    vi.useRealTimers();
   });
 });
 

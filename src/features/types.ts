@@ -5,4 +5,5 @@ export interface ContainerManifest {
   route: string;
   title: string;
   component: ComponentType;
+  showInNav?: boolean;
 }

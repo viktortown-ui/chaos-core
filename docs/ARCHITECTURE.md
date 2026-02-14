@@ -9,14 +9,17 @@
 - Each feature exports a manifest.
 - `src/features/registry.ts` is the single source of routable feature metadata.
 - App routing and navigation read from the registry to avoid duplicated route config.
+- Navigation visibility is controlled per manifest (`showInNav`).
 
 ## Data flow
 1. App bootstraps in `src/main.tsx` with `BrowserRouter` basename aligned to Vite base.
 2. `ChaosCoreProvider` owns in-memory app state and invokes core-domain transitions.
-3. Feature UIs dispatch intents.
-4. Persistence is handled through `src/core/storage.ts`.
+3. `AppRouter` gates non-onboarding routes until onboarding is completed.
+4. Feature UIs dispatch intents.
+5. Persistence is handled through `src/core/storage.ts`.
 
 ## Persistence schema policy
-- Current schema: `v1`.
+- Current schema: `v2`.
+- New data fields: `onboarding`, `profile`, and `history`.
 - Unsupported schema versions: fallback to defaults.
-- Schema-less legacy payloads: migrate forward to current schema with safe defaults.
+- Schema-less legacy payloads and `v1` payloads: migrate forward to `v2` with safe defaults while preserving known values.
