@@ -1,5 +1,5 @@
-import { xpToLevel } from '../core/formulas';
-import { useChaosCore } from './state';
+import { xpToLevel } from '../../../core/formulas';
+import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 
 export function ProfileScreen() {
   const { data } = useChaosCore();

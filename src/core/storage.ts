@@ -16,28 +16,34 @@ export const defaultCoreData: CoreDataV1 = {
   }
 };
 
+function migrateToV1(parsed: Partial<CoreDataV1>): CoreDataV1 {
+  return {
+    ...defaultCoreData,
+    ...parsed,
+    schemaVersion: STORAGE_SCHEMA_VERSION,
+    stats: {
+      ...defaultCoreData.stats,
+      ...parsed.stats
+    },
+    settings: {
+      ...defaultCoreData.settings,
+      ...parsed.settings
+    }
+  };
+}
+
 export function loadCoreData(): CoreDataV1 {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return defaultCoreData;
 
   try {
     const parsed = JSON.parse(raw) as Partial<CoreDataV1>;
-    if (parsed.schemaVersion !== STORAGE_SCHEMA_VERSION) {
-      return defaultCoreData;
+
+    if (parsed.schemaVersion === STORAGE_SCHEMA_VERSION || parsed.schemaVersion == null) {
+      return migrateToV1(parsed);
     }
 
-    return {
-      ...defaultCoreData,
-      ...parsed,
-      stats: {
-        ...defaultCoreData.stats,
-        ...parsed.stats
-      },
-      settings: {
-        ...defaultCoreData.settings,
-        ...parsed.settings
-      }
-    } as CoreDataV1;
+    return defaultCoreData;
   } catch {
     return defaultCoreData;
   }

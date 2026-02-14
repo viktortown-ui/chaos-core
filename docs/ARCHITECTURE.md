@@ -1,17 +1,22 @@
 # Architecture
 
 ## Folder structure
-- `src/core`: domain logic, formulas, storage schema/types
-- `src/containers`: route-level screens and app state provider
-- `src/ui`: reusable UI components
-- `src/fx`: effects hooks (reduced-motion support)
-- `src/modules`: extension point for future modules
+- `src/core`: pure domain logic and persistence behavior (`no React imports`).
+- `src/containers`: feature modules. Each container has `ui/`, `model/`, and `manifest.ts`.
+- `src/app`: app shell only (routing, layout, providers).
+- `src/ui`: shared presentational components.
+- `src/fx`: effects/hooks.
+
+## Container registry pattern
+- Every container exports a manifest describing route metadata and the screen component.
+- `src/containers/registry.ts` is the single module registry consumed by app routing and nav.
+- New feature containers must register their manifest in the registry to become routable.
 
 ## Data flow
-1. App boots and loads local data from `localStorage`.
-2. `ChaosCoreProvider` holds canonical state.
-3. Screen actions mutate state via pure functions in `src/core`.
-4. State changes persist back to `localStorage`.
+1. App boots in `src/main.tsx` and mounts app-shell providers and router.
+2. `ChaosCoreProvider` holds canonical app state.
+3. Containers dispatch user intent while domain transitions execute via `src/core` functions.
+4. State changes persist through storage helpers in `src/core/storage.ts`.
 
 ## Persistence schema (`v1`)
 - `schemaVersion: 1`
@@ -19,3 +24,5 @@
 - `stats: { strength, intelligence, wisdom, dexterity }`
 - `lastCheckInISO: string | null`
 - `settings: { reduceMotionOverride: boolean | null, soundFxEnabled: boolean }`
+
+Storage supports fallback to defaults and migration of schema-less payloads into `v1`.
