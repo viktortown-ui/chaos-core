@@ -1,14 +1,36 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { buildDemoData, defaultCoreData } from '../../../core/storage';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
+import { Language } from '../../../core/types';
+import { t } from '../../../shared/i18n';
 
 export function SettingsScreen() {
   const { data, setData } = useChaosCore();
   const navigate = useNavigate();
+  const language = data.settings.language;
 
   return (
     <section className="stack">
-      <h2>Settings</h2>
+      <h2>{t('settingsTitle', language)}</h2>
+      <label>
+        {t('language', language)}
+        <select
+          value={language}
+          onChange={(event) =>
+            setData((current) => ({
+              ...current,
+              settings: {
+                ...current.settings,
+                language: event.target.value as Language
+              }
+            }))
+          }
+        >
+          <option value="ru">{t('languageRu', language)}</option>
+          <option value="en">{t('languageEn', language)}</option>
+        </select>
+      </label>
+
       <label>
         <input
           type="checkbox"
@@ -23,7 +45,7 @@ export function SettingsScreen() {
             }))
           }
         />
-        Reduce motion override
+        {t('reduceMotionOverride', language)}
       </label>
 
       <label>
@@ -40,22 +62,22 @@ export function SettingsScreen() {
             }))
           }
         />
-        Sound FX (placeholder)
+        {t('soundFxPlaceholder', language)}
       </label>
 
-      <button onClick={() => setData(buildDemoData(new Date()))}>Load demo data</button>
+      <button onClick={() => setData(buildDemoData(new Date()))}>{t('loadDemoData', language)}</button>
       <button
         onClick={() => {
-          const shouldReset = window.confirm('Clear demo data and all local Chaos Core data?');
+          const shouldReset = window.confirm(t('confirmClearDemo', language));
           if (shouldReset) setData(defaultCoreData);
         }}
       >
-        Clear demo data (reset local data)
+        {t('clearDemoData', language)}
       </button>
 
       <button
         onClick={() => {
-          const shouldReset = window.confirm('Clear history and progression before re-running onboarding?');
+          const shouldReset = window.confirm(t('confirmRerunOnboarding', language));
           if (shouldReset) {
             setData(defaultCoreData);
           } else {
@@ -70,10 +92,10 @@ export function SettingsScreen() {
           navigate('/onboarding');
         }}
       >
-        Re-run onboarding
+        {t('rerunOnboarding', language)}
       </button>
 
-      <Link to="/glossary">Open glossary / help</Link>
+      <Link to="/glossary">{t('openGlossaryHelp', language)}</Link>
     </section>
   );
 }

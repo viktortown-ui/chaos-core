@@ -40,6 +40,7 @@ describe('storage', () => {
     expect(migrated.xp).toBe(50);
     expect(migrated.stats.strength).toBe(3);
     expect(migrated.settings.soundFxEnabled).toBe(false);
+    expect(migrated.settings.language).toBe('ru');
     expect(migrated.onboarding.completedAt).toBeUndefined();
     expect(migrated.profile.path).toBeUndefined();
   });
@@ -52,7 +53,7 @@ describe('storage', () => {
         xp: 80,
         stats: { dexterity: 6 },
         lastCheckInISO: '2026-02-10T08:00:00.000Z',
-        settings: { reduceMotionOverride: true, soundFxEnabled: true }
+        settings: { reduceMotionOverride: true, soundFxEnabled: true, language: 'en' }
       })
     );
 
@@ -63,6 +64,7 @@ describe('storage', () => {
     expect(migrated.lastCheckInISO).toBe('2026-02-10T08:00:00.000Z');
     expect(migrated.settings.reduceMotionOverride).toBe(true);
     expect(migrated.onboarding.version).toBe(1);
+    expect(migrated.settings.language).toBe('en');
   });
 
   it('builds deterministic demo data snapshot', () => {

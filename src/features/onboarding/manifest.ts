@@ -4,7 +4,7 @@ import { OnboardingScreen } from './ui/OnboardingScreen';
 export const onboardingManifest: ContainerManifest = {
   id: 'onboarding',
   route: '/onboarding',
-  title: 'Onboarding',
+  titleKey: 'navOnboarding',
   component: OnboardingScreen,
   showInNav: false
 };

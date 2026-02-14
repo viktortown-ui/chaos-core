@@ -1,8 +1,14 @@
+import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
+import { t } from '../../../shared/i18n';
+
 export function QuestsScreen() {
+  const { data } = useChaosCore();
+  const language = data.settings.language;
+
   return (
     <section className="stack">
-      <h2>Quests</h2>
-      <p>Quest chains are planned for v0.2. This screen is intentionally minimal for now.</p>
+      <h2>{t('questsTitle', language)}</h2>
+      <p>{t('questsPlaceholder', language)}</p>
     </section>
   );
 }

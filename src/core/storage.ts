@@ -12,7 +12,8 @@ export const defaultCoreData: CoreDataV2 = {
   lastCheckInISO: null,
   settings: {
     reduceMotionOverride: null,
-    soundFxEnabled: false
+    soundFxEnabled: false,
+    language: 'ru'
   },
   onboarding: {
     version: 1

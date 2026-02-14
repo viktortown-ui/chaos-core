@@ -4,6 +4,6 @@ import { ProfileScreen } from './ui/ProfileScreen';
 export const profileManifest: ContainerManifest = {
   id: 'profile',
   route: '/profile',
-  title: 'Profile',
+  titleKey: 'navProfile',
   component: ProfileScreen
 };

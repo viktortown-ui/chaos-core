@@ -4,6 +4,6 @@ import { CoreScreen } from './ui/CoreScreen';
 export const coreManifest: ContainerManifest = {
   id: 'core',
   route: '/',
-  title: 'Core',
+  titleKey: 'navCore',
   component: CoreScreen
 };
