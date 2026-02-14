@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
-import { CoreDataV1 } from '../core/types';
-import { loadCoreData, saveCoreData } from '../core/storage';
+import { CoreDataV1 } from '../../core/types';
+import { loadCoreData, saveCoreData } from '../../core/storage';
 
 interface ChaosCoreContextValue {
   data: CoreDataV1;

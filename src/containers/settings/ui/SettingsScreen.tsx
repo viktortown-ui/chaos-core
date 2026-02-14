@@ -1,5 +1,5 @@
-import { defaultCoreData } from '../core/storage';
-import { useChaosCore } from './state';
+import { defaultCoreData } from '../../../core/storage';
+import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 
 export function SettingsScreen() {
   const { data, setData } = useChaosCore();

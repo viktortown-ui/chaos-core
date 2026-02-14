@@ -1,11 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-
-const navItems = [
-  { to: '/', label: 'Core' },
-  { to: '/quests', label: 'Quests' },
-  { to: '/profile', label: 'Profile' },
-  { to: '/settings', label: 'Settings' }
-];
+import { containerRegistry } from '../../containers/registry';
 
 export function Layout() {
   return (
@@ -17,9 +11,9 @@ export function Layout() {
         <Outlet />
       </main>
       <nav className="bottombar" aria-label="Main navigation">
-        {navItems.map((item) => (
-          <NavLink key={item.to} to={item.to} end={item.to === '/'}>
-            {item.label}
+        {containerRegistry.map((item) => (
+          <NavLink key={item.id} to={item.route} end={item.route === '/'}>
+            {item.title}
           </NavLink>
         ))}
       </nav>

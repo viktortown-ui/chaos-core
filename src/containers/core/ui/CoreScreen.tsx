@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { applyDailyCheckIn, canCheckInToday } from '../core/storage';
-import { StatKey } from '../core/types';
-import { xpToLevel } from '../core/formulas';
-import { StatCard } from '../ui/StatCard';
-import { useChaosCore } from './state';
-import { useReducedMotion } from '../fx/useReducedMotion';
+import { applyDailyCheckIn, canCheckInToday } from '../../../core/storage';
+import { StatKey } from '../../../core/types';
+import { xpToLevel } from '../../../core/formulas';
+import { StatCard } from '../../../ui/StatCard';
+import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
+import { useReducedMotion } from '../../../fx/useReducedMotion';
 
 const statOptions: { key: StatKey; label: string }[] = [
   { key: 'strength', label: 'Strength' },

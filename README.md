@@ -15,6 +15,14 @@ npm ci
 npm run dev
 ```
 
+## Quality gate commands
+```bash
+npm ci
+npm test
+npm run build
+npm run preview
+```
+
 ## Scripts
 - `npm run dev`
 - `npm run build`
@@ -29,7 +37,7 @@ npm run dev
 3. Push to `main` to trigger `.github/workflows/pages.yml`.
 4. Open the generated Pages URL after deployment completes.
 
-The app is preconfigured for Pages project path `/chaos-core/` via Vite base path and router basename.
+The app is preconfigured for Pages project path `/chaos-core/` via Vite `base` and React Router `basename`.
 
 ## Docs
 - [Plan](docs/PLAN.md)
@@ -37,3 +45,4 @@ The app is preconfigured for Pages project path `/chaos-core/` via Vite base pat
 - [Architecture](docs/ARCHITECTURE.md)
 - [UX Notes](docs/UX_NOTES.md)
 - [Codex Rules](docs/CODEX_RULES.md)
+- [Decisions](docs/DECISIONS.md)

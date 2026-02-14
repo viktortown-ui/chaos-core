@@ -1,9 +1,10 @@
 # PLAN
 
-## v0.1 - Core Loop
-- Core screen with stats and core sphere
-- Daily check-in (+XP +stat)
-- Local persistence and settings
+## v0.1 - Core Loop (current)
+- Core check-in flow (+XP, +stat, one check-in/day)
+- Local persistence with migration safety
+- Container registry + app shell boundaries
+- CI + Pages deployment hardening (`npm ci`, lockfile)
 
 ## v0.2 - Quests
 - Daily/weekly quests
@@ -14,5 +15,5 @@
 - Risk/reward loops
 
 ## v1.0 - Modules
-- Plug-in module architecture
-- Stable extension contracts
+- Expanded module contracts over container manifests
+- Stable extension boundaries
