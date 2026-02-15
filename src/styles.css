@@ -63,7 +63,7 @@ button:disabled { opacity: 0.6; }
 .bottombar {
   border-top: 1px solid var(--surface-2);
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 0.4rem;
 }
 .bottombar a {
@@ -186,4 +186,26 @@ button:disabled { opacity: 0.6; }
   border-radius: 8px;
   padding: 0.6rem;
   font-size: 0.8rem;
+}
+
+
+.uplot {
+  width: 100%;
+}
+
+.uplot .u-legend {
+  font-size: 0.75rem;
+}
+
+.history-forecast-panel {
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-forecast-panel,
+  .uplot,
+  .uplot * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
