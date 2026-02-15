@@ -6,7 +6,7 @@ import { t } from '../../../shared/i18n';
 import { loadBaseline, loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '../../../shared/storage/simStorage';
 import { UPlotChart, UPlotSeries } from '../../charts/UPlotChart';
 import { SensitivityItem, SimConfigPayload, SimWorkerResponse } from '../worker/protocol';
-import { buildRiskDisplayMetric, DISCRETE_LEVEL_VALUES, formatMonthTick, nearestDiscreteLevel, riskEffectKey, successMeterLabel, togglePin, uncertaintyEffectKey } from './simulationViewModel';
+import { buildRiskDisplayMetric, DISCRETE_LEVEL_VALUES, formatMonthTick, heroStatusLabel, nearestDiscreteLevel, riskEffectKey, successMeterLabel, togglePin, uncertaintyEffectKey } from './simulationViewModel';
 
 type PresetKey = 'boost' | 'stabilize' | 'storm' | 'focus' | 'diversify';
 
@@ -38,6 +38,77 @@ function outOfTen(value: number): number {
 function pulseAndVibrate(trigger: () => void, reducedMotion: boolean) {
   if (!reducedMotion) trigger();
   if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10);
+}
+
+function CoreOrb({ reducedMotion, score }: { reducedMotion: boolean; score: number }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx || typeof ctx.createRadialGradient !== 'function') return;
+
+    const draw = (time = 0) => {
+      const width = canvas.width;
+      const height = canvas.height;
+      const cx = width / 2;
+      const cy = height / 2;
+      ctx.clearRect(0, 0, width, height);
+
+      const pulse = reducedMotion ? 0.92 : 0.92 + Math.sin(time / 580) * 0.04;
+      const coreRadius = 34 * pulse;
+      const gradient = ctx.createRadialGradient(cx - 9, cy - 10, 7, cx, cy, coreRadius + 14);
+      gradient.addColorStop(0, 'rgba(159, 236, 255, 0.92)');
+      gradient.addColorStop(0.45, 'rgba(91, 184, 245, 0.82)');
+      gradient.addColorStop(1, 'rgba(33, 77, 126, 0.22)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(112, 224, 255, 0.42)';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 48, 22, 0.35, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(245, 183, 108, 0.46)';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 53, 27, -0.4, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const particles = 7;
+      for (let i = 0; i < particles; i += 1) {
+        const angle = (i / particles) * Math.PI * 2 + (reducedMotion ? 0 : time / 2200);
+        const radius = 42 + (i % 3) * 5;
+        const x = cx + Math.cos(angle) * radius;
+        const y = cy + Math.sin(angle) * (radius * 0.45);
+        ctx.fillStyle = 'rgba(177, 233, 255, 0.72)';
+        ctx.beginPath();
+        ctx.arc(x, y, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = 'rgba(244, 248, 255, 0.95)';
+      ctx.font = '700 14px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${score}/10`, cx, cy + 5);
+    };
+
+    draw();
+    if (reducedMotion) return;
+
+    let frameId = 0;
+    const animate = (time: number) => {
+      draw(time);
+      frameId = requestAnimationFrame(animate);
+    };
+    frameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameId);
+  }, [reducedMotion, score]);
+
+  return <canvas ref={canvasRef} className="sim-orb" width={150} height={150} aria-hidden="true" />;
 }
 
 export function SimulationScreen() {
@@ -237,6 +308,7 @@ export function SimulationScreen() {
 
   const successMeter = result ? outOfTen(result.successRatio) : 0;
   const meterLabelKey = successMeterLabel(successMeter);
+  const statusKey = heroStatusLabel(successMeter);
   const thresholdHeadroom = result ? Math.round(result.scorePercentiles.p50 - successThreshold) : null;
   const spread = result ? Math.round(result.scorePercentiles.p90 - result.scorePercentiles.p10) : null;
 
@@ -251,11 +323,9 @@ export function SimulationScreen() {
     }));
   };
 
-  const gaugeLength = 2 * Math.PI * 44;
-  const gaugeProgress = (Math.max(0, Math.min(10, successMeter)) / 10) * gaugeLength;
-
   return (
-    <section className={`stack sim-screen${reducedMotion ? ' reduce-motion' : ''}`}>
+    <section className={`stack sim-screen cosmos-hud${reducedMotion ? ' reduce-motion' : ''}`}>
+      <div className="simBackdrop" aria-hidden="true" />
       <h2>{t('simulationTitle', language)}</h2>
       <div className="sim-inline-intro">
         <p>{t('simulationMeaningLine', language)}</p>
@@ -265,59 +335,63 @@ export function SimulationScreen() {
         </details>
       </div>
 
-      <div className="card stack">
-        <div className="preset-row sim-preset-row">
+      <div className="cosPanel cosPanel--tight stack">
+        <div className="sim-dock-row" role="group" aria-label={t('simulationLeversDockTitle', language)}>
           {presets.map((preset) => (
-            <button key={preset.key} className={selectedPreset === preset.key ? 'active-choice' : ''} onClick={() => applyPreset(preset.key)}>{t(`preset_${preset.key}` as never, language)}</button>
+            <button key={preset.key} className={`cosBtn cosBtn--ghost sim-dock-btn${selectedPreset === preset.key ? ' sim-dock-btn-active' : ''}`} onClick={() => applyPreset(preset.key)}>
+              <span aria-hidden="true">✦</span>
+              <span>{t(`preset_${preset.key}` as never, language)}</span>
+            </button>
           ))}
         </div>
-        <p><strong>{t('simulationTradeoff', language)}:</strong> {t(selectedTradeoff, language)}</p>
+        <p>{t('simulationTradeoff', language)}: {t(selectedTradeoff, language)}</p>
       </div>
 
-      <div className={`card stack sim-hero${heroPulse ? ' sim-hero-pulse' : ''}`}>
-        <strong>{t('simulationHeroTitle', language)}</strong>
-        {!result && <p>{t('simulationHeroEmpty', language)}</p>}
-        {result && (
-          <>
-            <div className="sim-gauge-row">
-              <svg viewBox="0 0 120 120" className="sim-gauge" role="img" aria-label={t('simulationChanceOutOfTen', language)}>
-                <circle cx="60" cy="60" r="44" className="sim-gauge-bg" />
-                <circle cx="60" cy="60" r="44" className="sim-gauge-value" style={{ strokeDasharray: `${gaugeProgress} ${gaugeLength}` }} />
-                <text x="60" y="58" textAnchor="middle" className="sim-gauge-number">{successMeter}</text>
-                <text x="60" y="76" textAnchor="middle" className="sim-gauge-total">/10</text>
-              </svg>
-              <div>
-                <strong>{t(meterLabelKey, language)}</strong>
-                <p>{t('simulationThresholdHeadroom', language)}: <strong>{thresholdHeadroom}</strong></p>
-                <p>{t('simulationSpread', language)}: <strong>{spread}</strong></p>
-              </div>
+      <div className={`cosPanel cosPanel--hero stack sim-hero${heroPulse ? ' sim-hero-pulse' : ''}${reducedMotion ? ' no-pulse' : ''}`}>
+        <div className="sim-hero-layout">
+          <div className="sim-hero-core">
+            <CoreOrb reducedMotion={reducedMotion} score={successMeter} />
+            <p className="sim-hero-core-title">{t('simulationHeroCoreTitle', language)}</p>
+          </div>
+          <div className="sim-hero-main stack">
+            <strong>{t('simulationHeroTitle', language)}</strong>
+            {!result && <p>{t('simulationHeroEmpty', language)}</p>}
+            {result && (
+              <>
+                <p className="sim-hero-status">{t(statusKey, language)}</p>
+                <p className="sim-hero-meter">{t(meterLabelKey, language)}</p>
+                <div className="sim-hero-metrics">
+                  <span className="cosChip">{t('simulationThresholdHeadroom', language)}: <strong>{thresholdHeadroom}</strong></span>
+                  <span className="cosChip">{t('simulationSpread', language)}: <strong>{spread}</strong></span>
+                </div>
+              </>
+            )}
+            <div className="preset-row sim-primary-actions">
+              <button className="cosBtn cosBtn--accent" onClick={applyBestLever} disabled={!sensitivity[0]}>{t('simulationApplyBestLever', language)}</button>
+              <button className="cosBtn" onClick={makeQuest}>{t('simulationMakeQuest', language)}</button>
             </div>
-          </>
-        )}
-        <div className="preset-row sim-primary-actions">
-          <button onClick={applyBestLever} disabled={!sensitivity[0]}>{t('simulationApplyBestLever', language)}</button>
-          <button onClick={makeQuest}>{t('simulationMakeQuest', language)}</button>
+          </div>
         </div>
       </div>
 
-      <div className="card stack">
-        <label>{t('simulationHorizon', language)}: {horizonMonths}
+      <div className="cosPanel stack">
+        <label>{t('simulationHorizon', language)} <span className="cosChip">{horizonMonths}</span>
           <input type="range" min={6} max={30} value={horizonMonths} onChange={(e) => setHorizonMonths(Number(e.target.value))} />
         </label>
-        <label>{t('simulationThreshold', language)}: {successThreshold}
+        <label>{t('simulationThreshold', language)} <span className="cosChip">{successThreshold}</span>
           <input type="range" min={80} max={180} step={1} value={successThreshold} onChange={(e) => setSuccessThreshold(Number(e.target.value))} />
         </label>
         <small>{t('simulationThresholdHelp', language)}</small>
 
-        <label>{t('simulationUncertainty', language)}: {t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)} <span title={t('simulationUncertaintyTooltip', language)} className="sim-help-dot">?</span>
+        <label>{t('simulationUncertainty', language)} <span className="cosChip">{t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}</span> <span title={t('simulationUncertaintyTooltip', language)} className="sim-help-dot">?</span>
           <input type="range" min={0} max={4} step={1} value={uncertaintyLevel} onChange={(e) => setUncertainty(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
         </label>
-        <small>{t('simulationFutureFan', language)}: {t(uncertaintyEffectKey(uncertaintyLevel), language)}</small>
+        <small>{t('simulationEffectFutureFan', language)}: {t(uncertaintyEffectKey(uncertaintyLevel), language)}</small>
 
-        <label>{t('simulationRiskAppetite', language)}: {t(`simulationRiskLevel${riskLevel + 1}` as never, language)} <span title={t('simulationRiskTooltip', language)} className="sim-help-dot">?</span>
+        <label>{t('simulationRiskAppetite', language)} <span className="cosChip">{t(`simulationRiskLevel${riskLevel + 1}` as never, language)}</span> <span title={t('simulationRiskTooltip', language)} className="sim-help-dot">?</span>
           <input type="range" min={0} max={4} step={1} value={riskLevel} onChange={(e) => setRiskAppetite(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
         </label>
-        <small>{t('simulationRiskPrice', language)}: {t(riskEffectKey(riskLevel), language)}</small>
+        <small>{t('simulationEffectRiskPrice', language)}: {t(riskEffectKey(riskLevel), language)}</small>
 
         <label>{t('simulationStrategy', language)}
           <select value={strategy} onChange={(e) => setStrategy(e.target.value as StrategyMode)}>
@@ -331,18 +405,21 @@ export function SimulationScreen() {
           {t('simulationBlackSwan', language)}
         </label>
         <div className="preset-row">
-          <button onClick={startSimulation}>{isRunning ? t('simulationRunning', language) : t('simulationRun', language)}</button>
-          <button onClick={saveCurrentTemplate}>{t('simulationSaveTemplate', language)}</button>
-          <button onClick={() => applyPreset('stabilize')}>{t('simulationReset', language)}</button>
+          <button className="cosBtn" onClick={startSimulation}>{isRunning ? t('simulationRunning', language) : t('simulationRun', language)}</button>
+          <button className="cosBtn cosBtn--ghost" onClick={saveCurrentTemplate}>{t('simulationSaveTemplate', language)}</button>
+          <button className="cosBtn cosBtn--ghost" onClick={() => applyPreset('stabilize')}>{t('simulationReset', language)}</button>
         </div>
-        {templates.length > 0 && <div className="preset-row sim-templates-row">{templates.slice(0, 3).map((template) => <button key={template.id} onClick={() => applyTemplate(template)}>{template.name}</button>)}</div>}
+        {templates.length > 0 && <div className="preset-row sim-templates-row">{templates.slice(0, 3).map((template) => <button className="cosBtn cosBtn--ghost" key={template.id} onClick={() => applyTemplate(template)}>{template.name}</button>)}</div>}
         {isRunning && <p>{t('simulationProgress', language)}: {Math.round(progress * 100)}%</p>}
       </div>
 
       {result && (
         <>
-          <div className="card stack">
-            <strong>{t('simulationTrajectoryTitle', language)}</strong>
+          <div className="cosPanel stack">
+            <div className="sim-chart-head">
+              <strong>{t('simulationTrajectoryTitle', language)}</strong>
+              {tooltip && <span className="cosChip">{t('simulationPinnedMonthBadge', language)} {tooltip.month}</span>}
+            </div>
             <UPlotChart
               data={fanData}
               series={fanSeries}
@@ -350,6 +427,7 @@ export function SimulationScreen() {
               reducedMotion={reducedMotion}
               ariaLabel={t('simulationTrajectoryTitle', language)}
               showLegend={false}
+              className="sim-oracle-frame"
               onScrubIndex={setScrubIndex}
               onTogglePin={(idx) => {
                 setPinnedIndex((current) => {
@@ -362,13 +440,13 @@ export function SimulationScreen() {
             />
             {!tooltip && <p className="sim-legend-hint">{t('simulationChartHint', language)}</p>}
             <div className="sim-legend-row">
-              <span><i className="chip bad" />{t('scenarioBad', language)}{tooltip ? `: ${Math.round(tooltip.point.p10)}` : ''}</span>
-              <span><i className="chip typical" />{t('scenarioTypical', language)}{tooltip ? `: ${Math.round(tooltip.point.p50)}` : ''}</span>
-              <span><i className="chip good" />{t('scenarioGood', language)}{tooltip ? `: ${Math.round(tooltip.point.p90)}` : ''}</span>
-              <span className="sim-threshold-chip"><i className="chip threshold" />{t('simulationThreshold', language)} {successThreshold}</span>
+              <span className="cosChip"><i className="chip bad" />{t('scenarioBad', language)}{tooltip ? `: ${Math.round(tooltip.point.p10)}` : ''}</span>
+              <span className="cosChip"><i className="chip typical" />{t('scenarioTypical', language)}{tooltip ? `: ${Math.round(tooltip.point.p50)}` : ''}</span>
+              <span className="cosChip"><i className="chip good" />{t('scenarioGood', language)}{tooltip ? `: ${Math.round(tooltip.point.p90)}` : ''}</span>
+              <span className="cosChip sim-threshold-chip"><i className="chip threshold" />{t('simulationThreshold', language)} {successThreshold}</span>
             </div>
             {tooltip && (
-              <div className="card sim-tooltip">
+              <div className="cosPanel sim-tooltip">
                 <strong>{t('simulationTooltipMonth', language)} {tooltip.month}</strong>
                 {pinnedIndex != null && <span className="sim-pinned-pill">{t('simulationPinnedMonth', language)} {tooltip.month}</span>}
                 <p>{t('scenarioBad', language)}: {Math.round(tooltip.point.p10)}</p>
@@ -378,7 +456,7 @@ export function SimulationScreen() {
             )}
           </div>
 
-          <details className="card stack" open>
+          <details className="cosPanel stack" open>
             <summary>{t('simulationDetails', language)}</summary>
             <strong>{t('simulationTopLevers', language)}</strong>
             <ol>
@@ -406,17 +484,17 @@ export function SimulationScreen() {
 
             <details>
               <summary>{t('simulationAdvanced', language)}</summary>
-              <p>{t('simulationRawMedian', language)}: {Math.round(result.scorePercentiles.p50)}</p>
-              <p>{t('simulationRawP10', language)}: {Math.round(result.scorePercentiles.p10)}</p>
-              <p>{t('simulationRawP90', language)}: {Math.round(result.scorePercentiles.p90)}</p>
-              <p>{t('simulationRawUncertainty', language)}: {uncertainty.toFixed(2)}</p>
-              <p>{t('simulationRawRiskAppetite', language)}: {riskAppetite.toFixed(2)}</p>
+              <p><code>{t('simulationRawMedian', language)}: {Math.round(result.scorePercentiles.p50)}</code></p>
+              <p><code>{t('simulationRawP10', language)}: {Math.round(result.scorePercentiles.p10)}</code></p>
+              <p><code>{t('simulationRawP90', language)}: {Math.round(result.scorePercentiles.p90)}</code></p>
+              <p><code>{t('simulationRawUncertainty', language)}: {uncertainty.toFixed(2)}</code></p>
+              <p><code>{t('simulationRawRiskAppetite', language)}: {riskAppetite.toFixed(2)}</code></p>
             </details>
           </details>
 
-          <div className="card stack">
+          <div className="cosPanel cosPanel--tight stack">
             <div className="preset-row">
-              <button onClick={() => { if (result) { saveBaseline({ label: new Date().toLocaleTimeString(), result: { scoreTrajectory: result.scoreTrajectory, horizonMonths: result.horizonMonths, runs: result.runs }, savedAtISO: new Date().toISOString() }); setBaseline(loadBaseline()); } }}>{t('simulationCompare', language)}</button>
+              <button className="cosBtn cosBtn--ghost" onClick={() => { if (result) { saveBaseline({ label: new Date().toLocaleTimeString(), result: { scoreTrajectory: result.scoreTrajectory, horizonMonths: result.horizonMonths, runs: result.runs }, savedAtISO: new Date().toISOString() }); setBaseline(loadBaseline()); } }}>{t('simulationCompare', language)}</button>
             </div>
           </div>
         </>

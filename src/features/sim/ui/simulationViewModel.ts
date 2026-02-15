@@ -43,6 +43,12 @@ export function successMeterLabel(value: number): 'simulationStatusFail' | 'simu
   return 'simulationStatusStrong';
 }
 
+export function heroStatusLabel(value: number): 'simulationHeroStatusFail' | 'simulationHeroStatusEdge' | 'simulationHeroStatusSuccess' {
+  if (value <= 3) return 'simulationHeroStatusFail';
+  if (value <= 6) return 'simulationHeroStatusEdge';
+  return 'simulationHeroStatusSuccess';
+}
+
 export function uncertaintyEffectKey(level: number): 'simulationFutureFanNarrow' | 'simulationFutureFanMedium' | 'simulationFutureFanWide' {
   if (level <= 1) return 'simulationFutureFanNarrow';
   if (level <= 3) return 'simulationFutureFanMedium';
