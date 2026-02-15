@@ -3,7 +3,7 @@ import { DecisionScreen } from './ui/DecisionScreen';
 
 export const decisionManifest: ContainerManifest = {
   id: 'decision',
-  route: '/decision',
+  route: '/oracle',
   titleKey: 'navDecision',
   component: DecisionScreen
 };

@@ -189,6 +189,25 @@ button:disabled { opacity: 0.6; }
 }
 
 
+.decision-screen .card,
+.decision-screen button {
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.decision-screen.reduce-motion .card,
+.decision-screen.reduce-motion button {
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .decision-screen .card,
+  .decision-screen button {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 .uplot {
   width: 100%;
 }
