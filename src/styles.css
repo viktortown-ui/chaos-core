@@ -49,12 +49,16 @@ button {
 button:disabled { opacity: 0.6; }
 
 .core-sphere-wrap { text-align: center; }
+.atomic-core-canvas-shell {
+  width: min(100%, 280px);
+  margin: 0 auto 0.8rem;
+}
 .core-sphere-wrap canvas {
   display: block;
-  margin: 0 auto 0.8rem;
+  margin: 0 auto;
   border-radius: 999px;
-  background: radial-gradient(circle at 35% 30%, rgba(57, 96, 180, 0.5), rgba(17, 27, 50, 0.6));
-  box-shadow: 0 0 30px rgba(110, 168, 254, 0.25);
+  background: radial-gradient(circle at 35% 28%, rgba(76, 114, 197, 0.4), rgba(18, 29, 54, 0.72));
+  box-shadow: 0 0 16px rgba(98, 151, 236, 0.22), 0 0 2px rgba(140, 188, 255, 0.42);
 }
 .bottombar {
   border-top: 1px solid var(--surface-2);
