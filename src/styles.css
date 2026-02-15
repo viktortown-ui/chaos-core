@@ -540,6 +540,69 @@ button:disabled { opacity: 0.6; }
 .sim-hero-status { margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--cos-text-hi); }
 .sim-hero-metrics { display: flex; flex-wrap: wrap; gap: 0.45rem; }
 
+.sim-hero-subline {
+  margin: -0.35rem 0 0;
+  color: var(--cos-text-lo);
+}
+
+.sim-sense-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.sim-sense-chip b { font-size: 0.83rem; }
+.sim-sense-chip small { font-size: 0.7rem; color: var(--cos-text-lo); }
+.sim-sense-chip--positive { border: 1px solid rgba(95, 225, 170, 0.35); }
+.sim-sense-chip--negative { border: 1px solid rgba(255, 129, 145, 0.4); }
+.sim-sense-chip--risk { border: 1px solid rgba(245, 188, 99, 0.35); max-width: 280px; }
+
+.sim-fan-arc {
+  width: 54px;
+  height: 10px;
+  border-top: 2px solid rgba(123, 208, 255, 0.75);
+  border-radius: 999px 999px 0 0;
+  opacity: 0.9;
+}
+
+.sim-value-pill {
+  font-weight: 700;
+  font-size: 0.9rem;
+  min-width: 3.3rem;
+  justify-content: center;
+}
+
+.sim-primary-actions .cosBtn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.sim-primary-actions .cosBtn small {
+  font-size: 0.7rem;
+  color: var(--cos-text-lo);
+  line-height: 1.2;
+}
+
+.sim-black-swan-control {
+  gap: 0.25rem;
+}
+
+.sim-hazard-chip {
+  font-size: 0.72rem;
+  opacity: 0.82;
+}
+
+.sim-hazard-chip.is-active {
+  border: 1px solid rgba(255, 149, 127, 0.55);
+  box-shadow: 0 0 10px rgba(255, 121, 90, 0.2);
+  opacity: 1;
+}
+
+
 .sim-dock-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRiskDisplayMetric, formatMonthTick, heroStatusLabel, nearestDiscreteLevel, togglePin } from './simulationViewModel';
+import { buildHeadroomChipModel, buildRiskDisplayMetric, buildSpreadChipModel, formatMonthTick, heroStatusLabel, nearestDiscreteLevel, rankLevers, riskCostLineKey, strategicLeverTitleKey, togglePin } from './simulationViewModel';
 
 describe('simulation view model helpers', () => {
   it('formats x-axis as months and never 1970 date labels', () => {
@@ -30,5 +30,26 @@ describe('simulation view model helpers', () => {
     expect(heroStatusLabel(2)).toBe('simulationHeroStatusFail');
     expect(heroStatusLabel(5)).toBe('simulationHeroStatusEdge');
     expect(heroStatusLabel(7)).toBe('simulationHeroStatusSuccess');
+  });
+
+  it('builds human chips for headroom/spread/risk tone', () => {
+    expect(buildHeadroomChipModel(58)).toMatchObject({ value: '+58', tone: 'positive', icon: '▲' });
+    expect(buildHeadroomChipModel(-472)).toMatchObject({ value: '−472', tone: 'negative', icon: '▼' });
+    expect(buildSpreadChipModel(5)).toEqual({ fan: 1, helpKey: 'simulationSpreadHelpNarrow' });
+    expect(buildSpreadChipModel(95)).toEqual({ fan: 10, helpKey: 'simulationSpreadHelpWide' });
+    expect(riskCostLineKey(1)).toBe('simulationRiskCostLineLow');
+    expect(riskCostLineKey(3)).toBe('simulationRiskCostLineHigh');
+  });
+
+  it('ranks and labels strategic levers deterministically', () => {
+    const ranked = rankLevers([
+      { lever: 'strategy', labelKey: 'leverStrategy', successDelta: 1, drawdownDelta: -1, cost: 0.5, score: 1, nextConfig: {} },
+      { lever: 'horizon', labelKey: 'leverHorizon', successDelta: 2, drawdownDelta: -4, cost: 0.2, score: 2, nextConfig: {} },
+      { lever: 'riskAppetite', labelKey: 'leverRiskAppetite', successDelta: 1, drawdownDelta: -2, cost: 0.2, score: 4, nextConfig: {} }
+    ] as never);
+    expect(ranked[0].lever).toBe('horizon');
+    expect(strategicLeverTitleKey(0)).toBe('simulationLeverCheapest');
+    expect(strategicLeverTitleKey(1)).toBe('simulationLeverFastest');
+    expect(strategicLeverTitleKey(2)).toBe('simulationLeverSafest');
   });
 });

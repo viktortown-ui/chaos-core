@@ -6,7 +6,7 @@ import { t } from '../../../shared/i18n';
 import { loadBaseline, loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '../../../shared/storage/simStorage';
 import { UPlotChart, UPlotSeries } from '../../charts/UPlotChart';
 import { SensitivityItem, SimConfigPayload, SimWorkerResponse } from '../worker/protocol';
-import { buildRiskDisplayMetric, DISCRETE_LEVEL_VALUES, formatMonthTick, heroStatusLabel, nearestDiscreteLevel, riskEffectKey, successMeterLabel, togglePin, uncertaintyEffectKey } from './simulationViewModel';
+import { buildHeadroomChipModel, buildRiskDisplayMetric, buildSpreadChipModel, DISCRETE_LEVEL_VALUES, formatMonthTick, heroStatusLabel, nearestDiscreteLevel, rankLevers, riskCostLineKey, riskEffectKey, strategicLeverTitleKey, successMeterLabel, togglePin, uncertaintyEffectKey } from './simulationViewModel';
 
 type PresetKey = 'boost' | 'stabilize' | 'storm' | 'focus' | 'diversify';
 
@@ -317,8 +317,16 @@ export function SimulationScreen() {
   const successMeter = result ? outOfTen(result.successRatio) : 0;
   const meterLabelKey = successMeterLabel(successMeter);
   const statusKey = heroStatusLabel(successMeter);
+  const statusSublineKey = statusKey === 'simulationHeroStatusSuccess'
+    ? 'simulationHeroSublineSuccess'
+    : statusKey === 'simulationHeroStatusEdge'
+      ? 'simulationHeroSublineNear'
+      : 'simulationHeroSublineFail';
   const thresholdHeadroom = result ? Math.round(result.scorePercentiles.p50 - successThreshold) : null;
   const spread = result ? Math.round(result.scorePercentiles.p90 - result.scorePercentiles.p10) : null;
+  const headroomChip = thresholdHeadroom == null ? null : buildHeadroomChipModel(thresholdHeadroom);
+  const spreadChip = spread == null ? null : buildSpreadChipModel(spread);
+  const topStrategicLevers = rankLevers(sensitivity).slice(0, 3);
 
   const uncertaintyLevel = nearestDiscreteLevel(uncertainty);
   const riskLevel = nearestDiscreteLevel(riskAppetite);
@@ -355,21 +363,43 @@ export function SimulationScreen() {
               <p className="sim-hero-core-title">{t('simulationHeroCoreTitle', language)}</p>
             </div>
             <div className="sim-hero-main stack">
-              <strong>{t('simulationHeroTitle', language)}</strong>
+              <strong>{t('simulationHeroHeadline', language)}</strong>
               {!result && <p>{t('simulationHeroEmpty', language)}</p>}
               {result && (
                 <>
                   <p className="sim-hero-status">{t(statusKey, language)}</p>
                   <p className="sim-hero-meter">{t(meterLabelKey, language)}</p>
+                  <p className="sim-hero-subline">{t(statusSublineKey, language)}</p>
                   <div className="sim-hero-metrics">
-                    <span className="cosChip">{t('simulationThresholdHeadroom', language)}: <strong>{thresholdHeadroom}</strong></span>
-                    <span className="cosChip">{t('simulationSpread', language)}: <strong>{spread}</strong></span>
+                    {headroomChip && (
+                      <span className={`cosChip sim-sense-chip sim-sense-chip--${headroomChip.tone}`}>
+                        <b>{headroomChip.icon} {headroomChip.tone === 'positive' ? `${t('simulationChipHeadroomStatePositive', language)} ${headroomChip.value}` : `${t('simulationChipHeadroomLabel', language)} ${headroomChip.value}`}</b>
+                        <small>{t(headroomChip.helpKey, language)} · {t(headroomChip.fuelKey, language)}</small>
+                      </span>
+                    )}
+                    {spreadChip && (
+                      <span className="cosChip sim-sense-chip sim-sense-chip--spread">
+                        <b>{t('simulationChipSpreadLabel', language)} {spreadChip.fan}/10</b>
+                        <i className="sim-fan-arc" aria-hidden="true" />
+                        <small>{t(spreadChip.helpKey, language)}</small>
+                      </span>
+                    )}
+                    <span className="cosChip sim-sense-chip sim-sense-chip--risk">
+                      <b>{t('simulationRiskCostLine', language)}</b>
+                      <small>{t(riskCostLineKey(riskLevel), language)}</small>
+                    </span>
                   </div>
                 </>
               )}
               <div className="preset-row sim-primary-actions">
-                <button className="cosBtn cosBtn--accent" onClick={applyBestLever} disabled={!sensitivity[0]}>{t('simulationApplyBestLever', language)}</button>
-                <button className="cosBtn" onClick={makeQuest}>{t('simulationMakeQuest', language)}</button>
+                <button className="cosBtn cosBtn--accent" onClick={applyBestLever} disabled={!sensitivity[0]}>
+                  <span>{t('simulationApplyBestLever', language)}</span>
+                  <small>{t('simulationApplyBestLeverSubtext', language)}</small>
+                </button>
+                <button className="cosBtn" onClick={makeQuest}>
+                  <span>{t('simulationMakeQuest', language)}</span>
+                  <small>{t('simulationMakeQuestSubtext', language)}</small>
+                </button>
               </div>
             </div>
           </div>
@@ -397,23 +427,24 @@ export function SimulationScreen() {
 
         <div className="stack">
           <div className="cosHudRow">
-            <label>{t('simulationHorizon', language)} <span className="cosChip">{horizonMonths}</span>
+            <label>{t('simulationHorizonForecast', language)} <span className="cosChip sim-value-pill">{horizonMonths} {t('simulationMonthsShort', language)}</span>
               <input type="range" min={6} max={30} value={horizonMonths} onChange={(e) => setHorizonMonths(Number(e.target.value))} />
+              <small>{t('simulationHorizonHelper', language)}</small>
             </label>
-            <label>{t('simulationThreshold', language)} <span className="cosChip">{successThreshold}</span>
+            <label>{t('simulationThresholdGoal', language)} <span className="cosChip sim-value-pill">{successThreshold}</span>
               <input type="range" min={80} max={180} step={1} value={successThreshold} onChange={(e) => setSuccessThreshold(Number(e.target.value))} />
+              <small>{t('simulationThresholdGoalHelper', language)}</small>
             </label>
           </div>
-          <small>{t('simulationThresholdHelp', language)}</small>
 
           <div className="cosHudRow">
-            <label>{t('simulationUncertainty', language)} <span className="cosChip">{t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}</span> <span title={t('simulationUncertaintyTooltip', language)} className="sim-help-dot">?</span>
+            <label>{t('simulationFogLabel', language)} <span className="cosChip sim-value-pill">{t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}</span> <span title={t('simulationUncertaintyTooltip', language)} className="sim-help-dot">?</span>
               <input type="range" min={0} max={4} step={1} value={uncertaintyLevel} onChange={(e) => setUncertainty(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
-              <small>{t('simulationEffectFutureFan', language)}: {t(uncertaintyEffectKey(uncertaintyLevel), language)}</small>
+              <small>{t('simulationFogHelper', language)} {t(uncertaintyEffectKey(uncertaintyLevel), language)}</small>
             </label>
-            <label>{t('simulationRiskAppetite', language)} <span className="cosChip">{t(`simulationRiskLevel${riskLevel + 1}` as never, language)}</span> <span title={t('simulationRiskTooltip', language)} className="sim-help-dot">?</span>
+            <label>{t('simulationCourageLabel', language)} <span className="cosChip sim-value-pill">{t(`simulationRiskLevel${riskLevel + 1}` as never, language)}</span> <span title={t('simulationRiskTooltip', language)} className="sim-help-dot">?</span>
               <input type="range" min={0} max={4} step={1} value={riskLevel} onChange={(e) => setRiskAppetite(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
-              <small>{t('simulationEffectRiskPrice', language)}: {t(riskEffectKey(riskLevel), language)}</small>
+              <small>{t('simulationCourageHelper', language)} {t(riskEffectKey(riskLevel), language)}</small>
             </label>
           </div>
 
@@ -425,9 +456,13 @@ export function SimulationScreen() {
                 <option value="defense">{t('strategyDefense', language)}</option>
               </select>
             </label>
-            <label>
-              <input type="checkbox" checked={blackSwanEnabled} onChange={(e) => setBlackSwanEnabled(e.target.checked)} />
-              {t('simulationBlackSwan', language)}
+            <label className="sim-black-swan-control">
+              <span>
+                <input type="checkbox" checked={blackSwanEnabled} onChange={(e) => setBlackSwanEnabled(e.target.checked)} />
+                {t('simulationBlackSwanLabel', language)}
+              </span>
+              <small>{t('simulationBlackSwanHelper', language)}</small>
+              <span className={`cosChip sim-hazard-chip${blackSwanEnabled ? ' is-active' : ''}`} title={`${t('simulationBlackSwanTooltipTitle', language)} ${t('simulationBlackSwanTooltipBody', language)}`}>☄ {blackSwanEnabled ? t('simulationHazardChipOn', language) : t('simulationHazardChipOff', language)}</span>
             </label>
           </div>
           <div className="preset-row">
@@ -465,7 +500,9 @@ export function SimulationScreen() {
               }}
               xAxisConfig={{ isTimeScale: false, values: (_u, values) => values.map((value) => formatMonthTick(value)) }}
             />
-            {!tooltip && <p className="sim-legend-hint">{t('simulationChartHint', language)}</p>}
+            <p className="sim-legend-hint">{t('simulationChartMeaningLine1', language)}</p>
+            <p className="sim-legend-hint">{t('simulationChartMeaningLine2', language)}</p>
+            <p className="sim-legend-hint">{t('simulationChartHintTapPin', language)}</p>
             <div className="sim-legend-row">
               <span className="cosChip"><i className="chip bad" />{t('scenarioBad', language)}{tooltip ? `: ${Math.round(tooltip.point.p10)}` : ''}</span>
               <span className="cosChip"><i className="chip typical" />{t('scenarioTypical', language)}{tooltip ? `: ${Math.round(tooltip.point.p50)}` : ''}</span>
@@ -488,9 +525,9 @@ export function SimulationScreen() {
             <summary>{t('simulationDetails', language)}</summary>
             <strong>{t('simulationTopLevers', language)}</strong>
             <ol>
-              {sensitivity.map((lever) => (
+              {topStrategicLevers.map((lever, index) => (
                 <li key={`${lever.labelKey}-${lever.score}`}>
-                  {t(lever.labelKey as never, language)} · {t('simulationLeverSuccessDelta', language)} {lever.successDelta >= 0 ? '+' : ''}{lever.successDelta}/10 · {t('simulationLeverDrawdownDelta', language)} {lever.drawdownDelta >= 0 ? '+' : ''}{lever.drawdownDelta}%
+                  {t(strategicLeverTitleKey(index), language)} {t(lever.labelKey as never, language)} · {t('simulationLeverSuccessDelta', language)} {lever.successDelta >= 0 ? '+' : ''}{lever.successDelta}/10 · {t('simulationLeverDrawdownDelta', language)} {lever.drawdownDelta >= 0 ? '+' : ''}{lever.drawdownDelta}%
                 </li>
               ))}
             </ol>
@@ -499,7 +536,7 @@ export function SimulationScreen() {
                 <strong>{t('simulationRiskEvents', language)}</strong>
                 <p>{t('simulationStressBreaks', language)}: {Math.round(riskSummary.stressBreaks.shareOfWorldsPct)}% {t('simulationWorldsSuffix', language)} ({riskSummary.stressBreaks.worldsWithEvent}/{result.runs}) · {riskSummary.stressBreaks.avgPerWorld.toFixed(1)} {t('simulationEventsPerWorld', language)}</p>
                 <p>{t('simulationDrawdowns', language)}: {Math.round(riskSummary.drawdownsOver20.shareOfWorldsPct)}% {t('simulationWorldsSuffix', language)} ({riskSummary.drawdownsOver20.worldsWithEvent}/{result.runs}) · {riskSummary.drawdownsOver20.avgPerWorld.toFixed(1)} {t('simulationEventsPerWorld', language)}</p>
-                <p>{t('simulationBlackSwansCount', language)}: {Math.round(riskSummary.blackSwans.shareOfWorldsPct)}% {t('simulationWorldsSuffix', language)} ({riskSummary.blackSwans.worldsWithEvent}/{result.runs}) · {riskSummary.blackSwans.avgPerWorld.toFixed(1)} {t('simulationEventsPerWorld', language)}</p>
+                <p>{t('simulationBlackSwansCount', language)}: {Math.round(riskSummary.blackSwans.shareOfWorldsPct)}% {t('simulationWorldsSuffix', language)} ({riskSummary.blackSwans.worldsWithEvent}/{result.runs}) · {riskSummary.blackSwans.avgPerWorld.toFixed(1)} {t('simulationEventsPerWorld', language)} · {t('simulationBlackSwanWorldsHit', language)}: {Math.round(riskSummary.blackSwans.shareOfWorldsPct)}% · {t('simulationBlackSwanHitsPerWorld', language)}: {riskSummary.blackSwans.avgPerWorld.toFixed(1)}</p>
               </>
             )}
 

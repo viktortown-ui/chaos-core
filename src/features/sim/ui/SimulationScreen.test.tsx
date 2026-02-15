@@ -98,9 +98,9 @@ describe('SimulationScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Панель управления')).toBeInTheDocument();
+      expect(screen.getByText('Консоль судьбы')).toBeInTheDocument();
       expect(screen.getByText('Успех')).toBeInTheDocument();
-      expect(screen.getByText(/Запас к порогу/)).toBeInTheDocument();
+      expect(screen.getByText(/До цели|Запас/)).toBeInTheDocument();
     });
   });
 
@@ -109,11 +109,11 @@ describe('SimulationScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Применить лучший рычаг' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: /Применить лучший рычаг/ })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Применить лучший рычаг' }));
-    expect(screen.getByText(/Горизонт \(месяцы\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Применить лучший рычаг/ }));
+    expect(screen.getByText(/Горизонт прогноза/)).toBeInTheDocument();
     expect(screen.getByDisplayValue('111')).toBeInTheDocument();
   });
 
@@ -145,10 +145,10 @@ describe('SimulationScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Применить лучший рычаг' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: /Применить лучший рычаг/ })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Применить лучший рычаг' }));
+    fireEvent.click(screen.getByRole('button', { name: /Применить лучший рычаг/ }));
     expect(document.querySelector('.sim-screen')).toHaveClass('reduce-motion');
     expect(document.querySelector('.sim-hero')).not.toHaveClass('sim-hero-pulse');
   });

@@ -1,4 +1,5 @@
 import { RiskEvents } from '../../../core/sim/types';
+import { SensitivityItem } from '../worker/protocol';
 
 export const DISCRETE_LEVEL_VALUES = [0.2, 0.4, 0.6, 0.8, 1] as const;
 
@@ -57,6 +58,71 @@ export function uncertaintyEffectKey(level: number): 'simulationFutureFanNarrow'
 
 export function riskEffectKey(level: number): 'simulationRiskPriceFrequent' | 'simulationRiskPriceRare' {
   return level >= 3 ? 'simulationRiskPriceFrequent' : 'simulationRiskPriceRare';
+}
+
+export interface HeadroomChipModel {
+  value: string;
+  stateKey: 'simulationChipHeadroomStatePositive' | 'simulationChipHeadroomStateNegative';
+  helpKey: 'simulationChipHeadroomHelpPos' | 'simulationChipHeadroomHelpNeg';
+  tone: 'positive' | 'negative';
+  icon: '▲' | '▼';
+  fuelKey: 'simulationFuelPositive' | 'simulationFuelNegative';
+}
+
+export function buildHeadroomChipModel(headroom: number): HeadroomChipModel {
+  const normalized = Math.round(headroom);
+  if (normalized >= 0) {
+    return {
+      value: `+${normalized}`,
+      stateKey: 'simulationChipHeadroomStatePositive',
+      helpKey: 'simulationChipHeadroomHelpPos',
+      tone: 'positive',
+      icon: '▲',
+      fuelKey: 'simulationFuelPositive'
+    };
+  }
+
+  return {
+    value: `−${Math.abs(normalized)}`,
+    stateKey: 'simulationChipHeadroomStateNegative',
+    helpKey: 'simulationChipHeadroomHelpNeg',
+    tone: 'negative',
+    icon: '▼',
+    fuelKey: 'simulationFuelNegative'
+  };
+}
+
+export interface SpreadChipModel {
+  fan: number;
+  helpKey: 'simulationSpreadHelpNarrow' | 'simulationSpreadHelpWide';
+}
+
+export function buildSpreadChipModel(spread: number): SpreadChipModel {
+  const fan = Math.max(0, Math.min(10, Math.round(spread / 10)));
+  return {
+    fan,
+    helpKey: fan <= 4 ? 'simulationSpreadHelpNarrow' : 'simulationSpreadHelpWide'
+  };
+}
+
+export function riskCostLineKey(level: number): 'simulationRiskCostLineLow' | 'simulationRiskCostLineHigh' {
+  return level >= 3 ? 'simulationRiskCostLineHigh' : 'simulationRiskCostLineLow';
+}
+
+export function strategicLeverTitleKey(index: number): 'simulationLeverCheapest' | 'simulationLeverFastest' | 'simulationLeverSafest' {
+  if (index === 1) return 'simulationLeverFastest';
+  if (index === 2) return 'simulationLeverSafest';
+  return 'simulationLeverCheapest';
+}
+
+export function rankLevers(levers: SensitivityItem[]): SensitivityItem[] {
+  return levers
+    .slice()
+    .sort((left, right) => {
+      if (left.cost !== right.cost) return left.cost - right.cost;
+      if (left.successDelta !== right.successDelta) return right.successDelta - left.successDelta;
+      return left.drawdownDelta - right.drawdownDelta;
+    });
 }
 
 export interface RiskDisplayMetric {
