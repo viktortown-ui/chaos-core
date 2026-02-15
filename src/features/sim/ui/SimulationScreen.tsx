@@ -341,7 +341,10 @@ export function SimulationScreen() {
     { labelKey: 'simulationHudDrawdown' as const, value: `${Math.round((result.riskEvents.drawdownsOver20.worldsWithEvent / Math.max(1, result.runs)) * 100)}%`, subtextKey: 'simulationHudDrawdownSub' as const, quipKey: 'simulationHudQuipRisk' as const, icon: '↧' }
   ] : [];
 
-  const strikeCards = riskSummary ? [
+  const strikeCards: Array<{
+    labelKey: 'simulationBlackSwanWorldsHit' | 'simulationBlackSwanHitsPerWorld' | 'simulationDrawdowns';
+    value: string;
+  }> = riskSummary ? [
     { labelKey: 'simulationBlackSwanWorldsHit', value: `${Math.round(riskSummary.blackSwans.shareOfWorldsPct)}%` },
     { labelKey: 'simulationBlackSwanHitsPerWorld', value: riskSummary.blackSwans.avgPerWorld.toFixed(1) },
     { labelKey: 'simulationDrawdowns', value: `${Math.round(riskSummary.drawdownsOver20.shareOfWorldsPct)}%` }
@@ -350,11 +353,19 @@ export function SimulationScreen() {
   const uncertaintyLevel = nearestDiscreteLevel(uncertainty);
   const riskLevel = nearestDiscreteLevel(riskAppetite);
 
-  const antiMeasures = [
+  const antiMeasures: Array<
+    | 'simulationCounterMeasureAttack'
+    | 'simulationCounterMeasureDefense'
+    | 'simulationCounterMeasureBalance'
+    | 'simulationCounterMeasureSwanOn'
+    | 'simulationCounterMeasureSwanOff'
+    | 'simulationCounterMeasureRiskHigh'
+    | 'simulationCounterMeasureRiskLow'
+  > = [
     strategy === 'attack' ? 'simulationCounterMeasureAttack' : strategy === 'defense' ? 'simulationCounterMeasureDefense' : 'simulationCounterMeasureBalance',
     blackSwanEnabled ? 'simulationCounterMeasureSwanOn' : 'simulationCounterMeasureSwanOff',
     riskLevel >= 3 ? 'simulationCounterMeasureRiskHigh' : 'simulationCounterMeasureRiskLow'
-  ] as const;
+  ];
 
   const makeQuest = () => {
     const summary = `${t('simulationQuestPrefix', language)}: ${t('simulationThreshold', language)} ${successThreshold}, ${t('simulationHorizon', language)} ${horizonMonths}`;
@@ -582,14 +593,14 @@ export function SimulationScreen() {
                 <div className="oracle-strike-grid">
                   {strikeCards.map((card) => (
                     <article key={card.labelKey} className="oracle-strike-card">
-                      <small>{t(card.labelKey as never, language)}</small>
+                      <small>{t(card.labelKey, language)}</small>
                       <strong>{card.value}</strong>
                     </article>
                   ))}
                 </div>
                 <strong>{t('simulationCounterMeasures', language)}</strong>
                 <ul className="oracle-counter-list">
-                  {antiMeasures.map((key) => <li key={key}>{t(key as never, language)}</li>)}
+                  {antiMeasures.map((key) => <li key={key}>{t(key, language)}</li>)}
                 </ul>
               </div>
             )}
