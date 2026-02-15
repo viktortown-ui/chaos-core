@@ -6,12 +6,14 @@ import { settingsManifest } from './settings/manifest';
 import { onboardingManifest } from './onboarding/manifest';
 import { glossaryManifest } from './glossary/manifest';
 import { simulationManifest } from './sim/manifest';
+import { decisionManifest } from './decision/manifest';
 
 export const containerRegistry: ContainerManifest[] = [
   coreManifest,
   questsManifest,
   profileManifest,
   simulationManifest,
+  decisionManifest,
   settingsManifest,
   onboardingManifest,
   glossaryManifest
