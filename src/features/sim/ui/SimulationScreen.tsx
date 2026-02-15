@@ -3,10 +3,9 @@ import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 import { SimulationResult, StrategyMode } from '../../../core/sim/types';
 import { useReducedMotion } from '../../../fx/useReducedMotion';
 import { t } from '../../../shared/i18n';
-import { loadBaseline, loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '../../../shared/storage/simStorage';
-import { UPlotChart, UPlotSeries } from '../../charts/UPlotChart';
+import { loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '../../../shared/storage/simStorage';
 import { SensitivityItem, SimConfigPayload, SimWorkerResponse } from '../worker/protocol';
-import { buildDistributionBars, buildFanPoints, buildHeadroomChipModel, buildRiskDisplayMetric, buildSpreadChipModel, DISCRETE_LEVEL_VALUES, formatMonthTick, heroStatusLabel, nearestDiscreteLevel, rankLevers, riskCostLineKey, riskEffectKey, strategicLeverTitleKey, successMeterLabel, togglePin, uncertaintyEffectKey } from './simulationViewModel';
+import { buildFanPoints, buildHeadroomChipModel, buildOraclePins, buildRiskDisplayMetric, buildSpreadChipModel, DISCRETE_LEVEL_VALUES, FanPoint, formatSignedPercent, formatSignedTenthsAsPercent, heroStatusLabel, nearestDiscreteLevel, rankLevers, riskCostLineKey, riskEffectKey, strategicLeverTitleKey, successMeterLabel, uncertaintyEffectKey } from './simulationViewModel';
 
 type PresetKey = 'boost' | 'stabilize' | 'storm' | 'focus' | 'diversify';
 
@@ -119,6 +118,153 @@ function CoreOrb({ reducedMotion, score }: { reducedMotion: boolean; score: numb
   return <canvas ref={canvasRef} className="sim-orb" width={150} height={150} aria-hidden="true" />;
 }
 
+function OracleCanvas({
+  fanPoints,
+  threshold,
+  pinnedMonths,
+  reducedMotion,
+  ariaLabel,
+  pinLabel
+}: {
+  fanPoints: FanPoint[];
+  threshold: number;
+  pinnedMonths: number[];
+  reducedMotion: boolean;
+  ariaLabel: string;
+  pinLabel: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || fanPoints.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx || typeof ctx.fillRect !== 'function') return;
+
+    const ratio = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const width = canvas.clientWidth || 900;
+    const height = 320;
+    canvas.width = Math.floor(width * ratio);
+    canvas.height = Math.floor(height * ratio);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+    const pad = { top: 24, right: 14, bottom: 34, left: 14 };
+    const chartW = width - pad.left - pad.right;
+    const chartH = height - pad.top - pad.bottom;
+    const values = fanPoints.flatMap((point) => [point.p10, point.p50, point.p90]);
+    values.push(threshold);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(1, max - min);
+    const toX = (index: number) => pad.left + (index / Math.max(1, fanPoints.length - 1)) * chartW;
+    const toY = (value: number) => pad.top + (1 - (value - min) / span) * chartH;
+
+    const draw = (time = 0) => {
+      ctx.clearRect(0, 0, width, height);
+      const bg = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(0, 0, 0, height) : null;
+      if (bg) {
+        bg.addColorStop(0, 'rgba(14,31,56,0.92)');
+        bg.addColorStop(1, 'rgba(8,18,32,0.92)');
+        ctx.fillStyle = bg;
+      } else {
+        ctx.fillStyle = 'rgba(10, 22, 40, 0.95)';
+      }
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.beginPath();
+      fanPoints.forEach((point, index) => {
+        const x = toX(index);
+        const y = toY(point.p90);
+        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      for (let index = fanPoints.length - 1; index >= 0; index -= 1) {
+        const x = toX(index);
+        const y = toY(fanPoints[index].p10);
+        ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      const coneFill = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH) : null;
+      if (coneFill) {
+        coneFill.addColorStop(0, 'rgba(71,153,255,0.32)');
+        coneFill.addColorStop(1, 'rgba(71,153,255,0.08)');
+        ctx.fillStyle = coneFill;
+      } else {
+        ctx.fillStyle = 'rgba(71,153,255,0.16)';
+      }
+      ctx.fill();
+
+      const drawLine = (extractor: (point: FanPoint) => number, color: string, widthPx: number) => {
+        ctx.beginPath();
+        fanPoints.forEach((point, index) => {
+          const x = toX(index);
+          const y = toY(extractor(point));
+          if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = widthPx;
+        ctx.setLineDash([]);
+        ctx.stroke();
+      };
+
+      drawLine((point) => point.p10, '#ff9f95', 1.8);
+      drawLine((point) => point.p50, '#89ffd2', 2.8);
+      drawLine((point) => point.p90, '#8ec5ff', 1.8);
+
+      ctx.beginPath();
+      ctx.setLineDash([8, 6]);
+      ctx.moveTo(pad.left, toY(threshold));
+      ctx.lineTo(pad.left + chartW, toY(threshold));
+      ctx.strokeStyle = '#ff6f7d';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      pinnedMonths.forEach((monthIndex) => {
+        const x = toX(monthIndex);
+        ctx.beginPath();
+        ctx.moveTo(x, pad.top);
+        ctx.lineTo(x, pad.top + chartH);
+        ctx.strokeStyle = 'rgba(212,230,255,0.28)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(235,244,255,0.9)';
+        ctx.font = '600 11px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${pinLabel} ${monthIndex + 1}`, x, height - 10);
+      });
+
+      if (!reducedMotion) {
+        const phase = time / 420;
+        [0, 1, 2].forEach((lane) => {
+          const progress = (phase * (0.2 + lane * 0.12)) % 1;
+          const pointIndex = Math.floor(progress * (fanPoints.length - 1));
+          const nextIndex = Math.min(fanPoints.length - 1, pointIndex + 1);
+          const mix = progress * (fanPoints.length - 1) - pointIndex;
+          const x = toX(pointIndex) + (toX(nextIndex) - toX(pointIndex)) * mix;
+          const lineVal = lane === 0 ? fanPoints[nextIndex].p10 : lane === 1 ? fanPoints[nextIndex].p50 : fanPoints[nextIndex].p90;
+          const y = toY(lineVal);
+          ctx.fillStyle = lane === 1 ? 'rgba(137,255,210,0.9)' : 'rgba(151,200,255,0.76)';
+          ctx.beginPath();
+          ctx.arc(x, y, lane === 1 ? 2.2 : 1.7, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+    };
+
+    draw();
+    if (reducedMotion) return;
+    let frame = 0;
+    const tick = (time: number) => {
+      draw(time);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [fanPoints, pinnedMonths, reducedMotion, threshold, pinLabel]);
+
+  return <canvas ref={canvasRef} className="oracle-canvas" role="img" aria-label={ariaLabel} />;
+}
+
 export function SimulationScreen() {
   const { data, setData } = useChaosCore();
   const language = data.settings.language;
@@ -132,15 +278,11 @@ export function SimulationScreen() {
   const [successThreshold, setSuccessThreshold] = useState(120);
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>('stabilize');
   const [result, setResult] = useState<SimulationResult | null>(null);
-  const [baseline, setBaseline] = useState(loadBaseline());
   const [templates, setTemplates] = useState<SimTemplate[]>([]);
   const [sensitivity, setSensitivity] = useState<SensitivityItem[]>([]);
   const [progress, setProgress] = useState(0);
   const [isRunning, setRunning] = useState(false);
-  const [scrubIndex, setScrubIndex] = useState<number | null>(null);
-  const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
   const [heroPulse, setHeroPulse] = useState(false);
-  const [oracleTab, setOracleTab] = useState<'fan' | 'distribution' | 'strikes'>('fan');
 
   const workerRef = useRef<Worker | null>(null);
   const activeIdRef = useRef<string | null>(null);
@@ -214,9 +356,6 @@ export function SimulationScreen() {
     if (!worker) return;
     setRunning(true);
     setProgress(0);
-    setPinnedIndex(null);
-    setScrubIndex(null);
-    setOracleTab('fan');
     const requestId = `sim-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     activeIdRef.current = requestId;
     worker.postMessage({ type: 'start', id: requestId, config: buildConfig() });
@@ -272,43 +411,6 @@ export function SimulationScreen() {
 
   const fanPoints = useMemo(() => buildFanPoints(result?.scoreTrajectory ?? []), [result]);
 
-  const fanData = useMemo(() => {
-    const x = fanPoints.map((point) => point.month);
-    return [
-      x,
-      fanPoints.map((point) => point.p10),
-      fanPoints.map((point) => point.p25),
-      fanPoints.map((point) => point.p50),
-      fanPoints.map((point) => point.p75),
-      fanPoints.map((point) => point.p90),
-      x.map(() => successThreshold),
-      ...(baseline ? [baseline.result.scoreTrajectory.map((_, index) => index + 1), baseline.result.scoreTrajectory.map((point) => point.p50)] : [])
-    ];
-  }, [fanPoints, successThreshold, baseline]);
-
-  const fanSeries: UPlotSeries[] = useMemo(() => ([
-    { label: t('simulationFanBandP10P90', language), color: '#4f6f9f', fill: 'rgba(93,138,210,0.16)' },
-    { label: t('simulationFanBandP25P75', language), color: '#61b9ff', fill: 'rgba(96,191,255,0.24)' },
-    { label: t('simulationFanMedian', language), color: '#8affc8', width: 3 },
-    { label: t('simulationFanBandP25P75', language), color: '#61b9ff', width: 1 },
-    { label: t('simulationFanBandP10P90', language), color: '#4f6f9f', width: 1 },
-    { label: t('simulationThreshold', language), color: '#ff6f7d', dash: [8, 6], width: 2 },
-    ...(baseline ? [{ label: t('simulationCompareBaseline', language), color: '#b9c0d4', dash: [4, 5], width: 2 }] : [])
-  ]), [language, baseline]);
-
-  const effectiveIndex = pinnedIndex ?? scrubIndex;
-  const tooltip = useMemo(() => {
-    if (!result || effectiveIndex == null) return null;
-    const point = fanPoints[effectiveIndex];
-    if (!point) return null;
-    return { point, month: effectiveIndex + 1 };
-  }, [effectiveIndex, result, fanPoints]);
-
-  const distributionBars = useMemo(() => {
-    if (!result) return [];
-    return buildDistributionBars(result.endingScore.binEdges, result.endingScore.bins);
-  }, [result]);
-
   const selectedTradeoff = presets.find((preset) => preset.key === selectedPreset)?.tradeoffKey ?? 'tradeoffStabilize';
 
   const riskSummary = useMemo(() => {
@@ -334,27 +436,32 @@ export function SimulationScreen() {
   const spreadChip = spread == null ? null : buildSpreadChipModel(spread);
   const topStrategicLevers = rankLevers(sensitivity).slice(0, 3);
 
-  const hudMetrics = result ? [
-    { labelKey: 'simulationHudSuccess' as const, value: `${Math.round(result.successRatio * 100)}%`, subtextKey: 'simulationHudSuccessSub' as const, quipKey: 'simulationHudQuipProbability' as const, icon: '◎' },
-    { labelKey: 'simulationHudMedian' as const, value: `${Math.round(result.scorePercentiles.p50)}`, subtextKey: 'simulationHudMedianSub' as const, quipKey: 'simulationHudQuipThreshold' as const, icon: '◉' },
-    { labelKey: 'simulationHudP10' as const, value: `${Math.round(result.scorePercentiles.p10)}`, subtextKey: 'simulationHudP10Sub' as const, quipKey: 'simulationHudQuipNoise' as const, icon: '⚠' },
-    { labelKey: 'simulationHudDrawdown' as const, value: `${Math.round((result.riskEvents.drawdownsOver20.worldsWithEvent / Math.max(1, result.runs)) * 100)}%`, subtextKey: 'simulationHudDrawdownSub' as const, quipKey: 'simulationHudQuipRisk' as const, icon: '↧' }
-  ] : [];
+  const oraclePins = useMemo(() => buildOraclePins(fanPoints.length, null), [fanPoints.length]);
 
-  const strikeCards = riskSummary ? [
-    { labelKey: 'simulationBlackSwanWorldsHit', value: `${Math.round(riskSummary.blackSwans.shareOfWorldsPct)}%` },
-    { labelKey: 'simulationBlackSwanHitsPerWorld', value: riskSummary.blackSwans.avgPerWorld.toFixed(1) },
-    { labelKey: 'simulationDrawdowns', value: `${Math.round(riskSummary.drawdownsOver20.shareOfWorldsPct)}%` }
+  const kpiMetrics = result && riskSummary ? [
+    {
+      labelKey: 'simulationOracleKpiSuccess',
+      value: `${Math.round(result.successRatio * 100)}%`,
+      hintKey: 'simulationOracleKpiSuccessHint'
+    },
+    {
+      labelKey: 'simulationOracleKpiTypical',
+      value: `${Math.round(result.scorePercentiles.p50)}`,
+      hintKey: 'simulationOracleKpiTypicalHint'
+    },
+    {
+      labelKey: 'simulationOracleKpiDrawdown',
+      value: `${Math.round(riskSummary.drawdownsOver20.shareOfWorldsPct)}%`,
+      hintKey: 'simulationOracleKpiDrawdownHint'
+    },
+    {
+      labelKey: 'simulationOracleKpiSwan',
+      value: `${Math.round(riskSummary.blackSwans.shareOfWorldsPct)}% · ${riskSummary.blackSwans.avgPerWorld.toFixed(1)}`,
+      hintKey: 'simulationOracleKpiSwanHint'
+    }
   ] : [];
-
   const uncertaintyLevel = nearestDiscreteLevel(uncertainty);
   const riskLevel = nearestDiscreteLevel(riskAppetite);
-
-  const antiMeasures = [
-    strategy === 'attack' ? 'simulationCounterMeasureAttack' : strategy === 'defense' ? 'simulationCounterMeasureDefense' : 'simulationCounterMeasureBalance',
-    blackSwanEnabled ? 'simulationCounterMeasureSwanOn' : 'simulationCounterMeasureSwanOff',
-    riskLevel >= 3 ? 'simulationCounterMeasureRiskHigh' : 'simulationCounterMeasureRiskLow'
-  ] as const;
 
   const makeQuest = () => {
     const summary = `${t('simulationQuestPrefix', language)}: ${t('simulationThreshold', language)} ${successThreshold}, ${t('simulationHorizon', language)} ${horizonMonths}`;
@@ -484,10 +591,14 @@ export function SimulationScreen() {
             <label className="sim-black-swan-control">
               <span>
                 <input type="checkbox" checked={blackSwanEnabled} onChange={(e) => setBlackSwanEnabled(e.target.checked)} />
-                {t('simulationBlackSwanLabel', language)}
+                {t('simulationBlackSwanRealityLabel', language)}
               </span>
-              <small>{t('simulationBlackSwanHelper', language)}</small>
-              <span className={`cosChip sim-hazard-chip${blackSwanEnabled ? ' is-active' : ''}`} title={`${t('simulationBlackSwanTooltipTitle', language)} ${t('simulationBlackSwanTooltipBody', language)}`}>☄ {blackSwanEnabled ? t('simulationHazardChipOn', language) : t('simulationHazardChipOff', language)}</span>
+              <small>{t('simulationBlackSwanRealityHelper', language)}</small>
+              {blackSwanEnabled && riskSummary && (
+                <span className="cosChip sim-hazard-chip is-active" title={`${t('simulationBlackSwanTooltipTitle', language)} ${t('simulationBlackSwanTooltipBody', language)}`}>
+                  ☄ {t('simulationHazardChipOn', language)} · {Math.round(riskSummary.blackSwans.shareOfWorldsPct)}% / {riskSummary.blackSwans.avgPerWorld.toFixed(1)}
+                </span>
+              )}
             </label>
           </div>
           <div className="preset-row">
@@ -502,104 +613,35 @@ export function SimulationScreen() {
       {result && (
         <>
           <div className="cosDivider" aria-hidden="true" />
-          <section className="oracle-theater stack" aria-label={t('simulationOracleTheater', language)}>
-            <div className="oracle-hud-grid">
-              {hudMetrics.map((metric) => (
-                <article key={metric.labelKey} className="oracle-hud-tile">
-                  <span className="oracle-hud-icon" aria-hidden="true">{metric.icon}</span>
-                  <p className="oracle-hud-label">{t(metric.labelKey, language)}</p>
+          <section className="oracle-theater stack oracle-stage" aria-label={t('simulationOracleTheater', language)}>
+            <div className="sim-chart-head">
+              <strong>{t('simulationOracleStageTitle', language)}</strong>
+              <span className="cosChip">{t('simulationOracleStageSub', language)}</span>
+            </div>
+            <OracleCanvas
+              fanPoints={fanPoints}
+              threshold={successThreshold}
+              pinnedMonths={oraclePins}
+              reducedMotion={reducedMotion}
+              ariaLabel={t('simulationTrajectoryTitle', language)}
+              pinLabel={t('simulationTooltipMonth', language)}
+            />
+            <div className="oracle-kpi-strip">
+              {kpiMetrics.map((metric) => (
+                <article key={metric.labelKey} className="oracle-kpi-chip">
+                  <small>{t(metric.labelKey as never, language)}</small>
                   <strong>{metric.value}</strong>
-                  <small>{t(metric.subtextKey, language)}</small>
-                  <p className="oracle-hud-quip">{t(metric.quipKey, language)}</p>
+                  <p>{t(metric.hintKey as never, language)}</p>
                 </article>
               ))}
             </div>
 
-            <div className="oracle-tabs" role="tablist" aria-label={t('simulationOracleTabs', language)}>
-              <button className={`cosBtn cosBtn--ghost${oracleTab === 'fan' ? ' sim-dock-btn-active' : ''}`} role="tab" aria-selected={oracleTab === 'fan'} onClick={() => setOracleTab('fan')}>{t('simulationTabFan', language)}</button>
-              <button className={`cosBtn cosBtn--ghost${oracleTab === 'distribution' ? ' sim-dock-btn-active' : ''}`} role="tab" aria-selected={oracleTab === 'distribution'} onClick={() => setOracleTab('distribution')}>{t('simulationTabDistribution', language)}</button>
-              <button className={`cosBtn cosBtn--ghost${oracleTab === 'strikes' ? ' sim-dock-btn-active' : ''}`} role="tab" aria-selected={oracleTab === 'strikes'} onClick={() => setOracleTab('strikes')}>{t('simulationTabStrikes', language)}</button>
-            </div>
-
-            {oracleTab === 'fan' && (
-              <div className="cosOracleFrame stack">
-                <div className="sim-chart-head">
-                  <strong>{t('simulationFutureFan', language)}</strong>
-                  {tooltip && <span className="cosChip">{t('simulationPinnedMonthBadge', language)} {tooltip.month}</span>}
-                </div>
-                <UPlotChart
-                  data={fanData}
-                  series={fanSeries}
-                  kind="time-series"
-                  reducedMotion={reducedMotion}
-                  ariaLabel={t('simulationTrajectoryTitle', language)}
-                  showLegend={false}
-                  className="sim-oracle-frame"
-                  onScrubIndex={setScrubIndex}
-                  onTogglePin={(idx) => {
-                    setPinnedIndex((current) => {
-                      const next = togglePin(current, idx);
-                      pulseAndVibrate(() => setHeroPulse(true), reducedMotion);
-                      return next;
-                    });
-                  }}
-                  xAxisConfig={{ isTimeScale: false, values: (_u, values) => values.map((value) => formatMonthTick(value)) }}
-                />
-                <p className="sim-legend-hint">{t('simulationFanExplainer', language)}</p>
-                <p className="sim-legend-hint">{t('simulationChartHintTapPin', language)}</p>
-                {tooltip && (
-                  <div className="sim-tooltip">
-                    <strong>{t('simulationTooltipMonth', language)} {tooltip.month}</strong>
-                    {pinnedIndex != null && <span className="sim-pinned-pill">{t('simulationPinnedMonth', language)} {tooltip.month}</span>}
-                    <p>P10: {Math.round(tooltip.point.p10)} · P25: {Math.round(tooltip.point.p25)}</p>
-                    <p>P50: {Math.round(tooltip.point.p50)} · P75: {Math.round(tooltip.point.p75)} · P90: {Math.round(tooltip.point.p90)}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {oracleTab === 'distribution' && (
-              <div className="stack">
-                <p className="sim-legend-hint">{t('simulationDistributionMajority', language)}</p>
-                <p className="sim-legend-hint">{t('simulationDistributionPain', language)}</p>
-                <div className="sim-histogram" role="img" aria-label={t('simulationHistogramTitle', language)}>
-                  {distributionBars.map((bar) => (
-                    <div key={bar.index} className="sim-bar" style={{ height: `${bar.heightPct}%` }} title={`${Math.round(bar.edgeLeft)}-${Math.round(bar.edgeRight)}`} />
-                  ))}
-                </div>
-                <div className="sim-legend-row">
-                  <span className="cosChip">P10 {Math.round(result.scorePercentiles.p10)}</span>
-                  <span className="cosChip">P50 {Math.round(result.scorePercentiles.p50)}</span>
-                  <span className="cosChip">P90 {Math.round(result.scorePercentiles.p90)}</span>
-                  <span className="cosChip sim-threshold-chip">{t('simulationThreshold', language)} {successThreshold}</span>
-                </div>
-              </div>
-            )}
-
-            {oracleTab === 'strikes' && (
-              <div className="stack">
-                <p className="sim-legend-hint">{t('simulationBlackSwanTheaterHint', language)}</p>
-                <div className="oracle-strike-grid">
-                  {strikeCards.map((card) => (
-                    <article key={card.labelKey} className="oracle-strike-card">
-                      <small>{t(card.labelKey, language)}</small>
-                      <strong>{card.value}</strong>
-                    </article>
-                  ))}
-                </div>
-                <strong>{t('simulationCounterMeasures', language)}</strong>
-                <ul className="oracle-counter-list">
-                  {antiMeasures.map((key) => <li key={key}>{t(key, language)}</li>)}
-                </ul>
-              </div>
-            )}
-
-            <div className="lever-cards-grid">
+            <div className="lever-cards-grid oracle-command-grid">
               {topStrategicLevers.map((lever, index) => (
                 <article key={`${lever.labelKey}-${lever.score}`} className="oracle-lever-card">
-                  <strong>{t(strategicLeverTitleKey(index), language)} {t(lever.labelKey as never, language)}</strong>
-                  <p>{t('simulationLeverWhy', language)}: {t('simulationLeverSuccessDelta', language)} {lever.successDelta >= 0 ? '+' : ''}{lever.successDelta}/10</p>
-                  <p>{t('simulationLeverCost', language)}: {t('simulationLeverDrawdownDelta', language)} {lever.drawdownDelta >= 0 ? '+' : ''}{lever.drawdownDelta}%</p>
+                  <strong>{t(strategicLeverTitleKey(index), language)}</strong>
+                  <p className="oracle-command-line">{t('simulationOracleDo', language)}: {t(lever.labelKey as never, language)}</p>
+                  <p className="oracle-command-impact">{t('simulationOracleEffect', language)}: {t('simulationLeverSuccessDelta', language)} {formatSignedTenthsAsPercent(lever.successDelta)} · {t('simulationLeverDrawdownDelta', language)} {formatSignedPercent(lever.drawdownDelta)}</p>
                   <button className="cosBtn cosBtn--ghost" onClick={applyBestLever}>{t('simulationApplyLever', language)}</button>
                 </article>
               ))}
@@ -618,7 +660,7 @@ export function SimulationScreen() {
           <div className="cosDivider" aria-hidden="true" />
           <div className="stack">
             <div className="preset-row">
-              <button className="cosBtn cosBtn--ghost" onClick={() => { if (result) { saveBaseline({ label: new Date().toLocaleTimeString(), result: { scoreTrajectory: result.scoreTrajectory, horizonMonths: result.horizonMonths, runs: result.runs }, savedAtISO: new Date().toISOString() }); setBaseline(loadBaseline()); } }}>{t('simulationCompare', language)}</button>
+              <button className="cosBtn cosBtn--ghost" onClick={() => { if (result) { saveBaseline({ label: new Date().toLocaleTimeString(), result: { scoreTrajectory: result.scoreTrajectory, horizonMonths: result.horizonMonths, runs: result.runs }, savedAtISO: new Date().toISOString() }); } }}>{t('simulationCompare', language)}</button>
             </div>
           </div>
         </>
