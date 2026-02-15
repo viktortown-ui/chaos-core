@@ -29,17 +29,18 @@ interface UPlotChartProps {
   onScrubIndex?: (index: number) => void;
   onTogglePin?: (index: number) => void;
   xAxisConfig?: XAxisConfig;
+  showLegend?: boolean;
 }
 
 const CHART_HEIGHT = 240;
 
-function buildOptions(kind: ChartKind, series: UPlotSeries[], width: number, xAxisConfig?: XAxisConfig): Options {
+function buildOptions(kind: ChartKind, series: UPlotSeries[], width: number, showLegend: boolean, xAxisConfig?: XAxisConfig): Options {
   const isDistribution = kind === 'distribution';
 
   return {
     width,
     height: CHART_HEIGHT,
-    legend: { show: true },
+    legend: { show: showLegend },
     cursor: { drag: { x: !isDistribution, y: false } },
     scales: {
       x: { time: xAxisConfig?.isTimeScale ?? !isDistribution },
@@ -64,7 +65,7 @@ function buildOptions(kind: ChartKind, series: UPlotSeries[], width: number, xAx
   };
 }
 
-export function UPlotChart({ data, series, kind, ariaLabel, reducedMotion, className, onScrubIndex, onTogglePin, xAxisConfig }: UPlotChartProps) {
+export function UPlotChart({ data, series, kind, ariaLabel, reducedMotion, className, onScrubIndex, onTogglePin, xAxisConfig, showLegend = true }: UPlotChartProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<uPlot | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -74,8 +75,8 @@ export function UPlotChart({ data, series, kind, ariaLabel, reducedMotion, class
   const isScrubbingRef = useRef(false);
 
   const chartKey = useMemo(
-    () => `${kind}|${reducedMotion ? 'reduced' : 'full'}|${series.map((item) => `${item.label}:${item.color}`).join('|')}`,
-    [kind, reducedMotion, series]
+    () => `${kind}|${reducedMotion ? 'reduced' : 'full'}|${showLegend ? 'legend' : 'no-legend'}|${series.map((item) => `${item.label}:${item.color}`).join('|')}`,
+    [kind, reducedMotion, series, showLegend]
   );
 
   useLayoutEffect(() => {
@@ -83,7 +84,7 @@ export function UPlotChart({ data, series, kind, ariaLabel, reducedMotion, class
     if (!host) return;
 
     const width = Math.max(280, Math.floor(host.getBoundingClientRect().width || 320));
-    const options = buildOptions(kind, series, width, xAxisConfig);
+    const options = buildOptions(kind, series, width, showLegend, xAxisConfig);
     const chart = new uPlot(options, data as unknown as uPlot.AlignedData, host);
     chartRef.current = chart;
 
@@ -102,17 +103,15 @@ export function UPlotChart({ data, series, kind, ariaLabel, reducedMotion, class
         rafRef.current = null;
       }
     };
-  }, [chartKey, xAxisConfig, kind, series, data]);
+  }, [chartKey, xAxisConfig, kind, series, data, showLegend]);
 
   useEffect(() => {
     if (!chartRef.current) return;
     chartRef.current.setData(data as unknown as uPlot.AlignedData);
   }, [data]);
 
-
   const updateIndex = (nextIndex: number) => {
-    const chart = chartRef.current;
-    if (!chart || !onScrubIndex) return;
+    if (!onScrubIndex) return;
     if (lastIndexRef.current === nextIndex) return;
     lastIndexRef.current = nextIndex;
     onScrubIndex(nextIndex);
@@ -137,8 +136,8 @@ export function UPlotChart({ data, series, kind, ariaLabel, reducedMotion, class
     const bounds = overlay.getBoundingClientRect();
     const left = event.clientX - bounds.left;
     const plotLeft = left - chart.bbox.left;
-    if (plotLeft < 0 || plotLeft > chart.bbox.width) return null;
-    const idx = chart.posToIdx(plotLeft);
+    const clamped = Math.min(chart.bbox.width, Math.max(0, plotLeft));
+    const idx = chart.posToIdx(clamped);
     if (!Number.isFinite(idx) || idx < 0) return null;
     return Math.min((data[0]?.length ?? 1) - 1, idx);
   };

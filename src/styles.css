@@ -266,7 +266,7 @@ button:disabled { opacity: 0.6; }
 
 .uplot-touch-overlay {
   position: absolute;
-  inset: 0;
+  inset: -14px;
   touch-action: pan-y;
   cursor: crosshair;
 }
@@ -285,4 +285,99 @@ button:disabled { opacity: 0.6; }
   border-radius: 999px;
   padding: 0.2rem 0.6rem;
   font-size: 0.75rem;
+}
+
+
+.sim-inline-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.sim-inline-intro p { margin: 0.1rem 0; }
+
+.sim-inline-intro details summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.sim-hero {
+  border-color: #33557d;
+  background: radial-gradient(circle at 15% 10%, rgba(56, 103, 173, 0.35), #101722);
+}
+
+.sim-hero-pulse {
+  animation: heroPulse 200ms ease-out;
+}
+
+@keyframes heroPulse {
+  from { box-shadow: 0 0 0 rgba(116, 192, 255, 0.0); }
+  50% { box-shadow: 0 0 18px rgba(116, 192, 255, 0.5); }
+  to { box-shadow: 0 0 0 rgba(116, 192, 255, 0.0); }
+}
+
+.sim-gauge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.sim-gauge { width: 106px; height: 106px; }
+.sim-gauge-bg { fill: none; stroke: #253042; stroke-width: 12; }
+.sim-gauge-value {
+  fill: none;
+  stroke: #63e6b0;
+  stroke-width: 12;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 60px 60px;
+}
+.sim-gauge-number { fill: #f2f7ff; font-size: 28px; font-weight: 700; }
+.sim-gauge-total { fill: #9ca5bf; font-size: 12px; }
+
+.sim-help-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 1px solid #41516d;
+  font-size: 0.7rem;
+}
+
+.sim-primary-actions button { flex: 1; min-width: 140px; }
+
+.sim-legend-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.sim-legend-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
+
+.sim-legend-row .chip {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  margin-right: 0.35rem;
+}
+
+.sim-legend-row .chip.bad { background: #6a84b7; }
+.sim-legend-row .chip.typical { background: #56d9a4; }
+.sim-legend-row .chip.good { background: #f8b66b; }
+.sim-legend-row .chip.threshold { background: #ff6f7d; }
+
+.sim-threshold-chip {
+  justify-self: flex-start;
+  border: 1px solid #4f4153;
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
 }
