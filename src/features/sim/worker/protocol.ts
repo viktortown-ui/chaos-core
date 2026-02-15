@@ -1,4 +1,4 @@
-import { Action, ScenarioParams, SimulationResult, StateVector, StrategyMode } from '../../../core/sim/types';
+import { Action, LeverKey, ScenarioParams, SimulationResult, StateVector, StrategyMode } from '../../../core/sim/types';
 
 export interface SimConfigPayload {
   runs: number;
@@ -10,15 +10,28 @@ export interface SimConfigPayload {
   uncertainty: number;
   riskAppetite: number;
   blackSwanEnabled: boolean;
+  successThreshold: number;
+}
+
+export interface SensitivityItem {
+  lever: LeverKey;
+  labelKey: string;
+  successDelta: number;
+  drawdownDelta: number;
+  cost: number;
+  score: number;
+  nextConfig: Partial<Pick<SimConfigPayload, 'strategy' | 'riskAppetite' | 'horizonMonths' | 'successThreshold'>>;
 }
 
 export type SimWorkerRequest =
   | { type: 'start'; id: string; config: SimConfigPayload }
+  | { type: 'sensitivity'; id: string; config: SimConfigPayload }
   | { type: 'cancel'; id: string };
 
 export type SimWorkerResponse =
   | { type: 'progress'; id: string; progress: number; partialResult: SimulationResult }
   | { type: 'done'; id: string; result: SimulationResult }
+  | { type: 'sensitivity-done'; id: string; levers: SensitivityItem[] }
   | { type: 'cancelled'; id: string }
   | { type: 'error'; id: string; message: string };
 

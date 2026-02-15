@@ -21,11 +21,12 @@ interface UPlotChartProps {
   ariaLabel: string;
   reducedMotion: boolean;
   className?: string;
+  onScrubIndex?: (index: number) => void;
 }
 
 const CHART_HEIGHT = 240;
 
-function buildOptions(kind: ChartKind, series: UPlotSeries[], width: number): Options {
+function buildOptions(kind: ChartKind, series: UPlotSeries[], width: number, onScrubIndex?: (index: number) => void): Options {
   const isDistribution = kind === 'distribution';
 
   return {
@@ -33,6 +34,13 @@ function buildOptions(kind: ChartKind, series: UPlotSeries[], width: number): Op
     height: CHART_HEIGHT,
     legend: { show: true },
     cursor: { drag: { x: !isDistribution, y: false } },
+    hooks: onScrubIndex ? {
+      setCursor: [
+        (u) => {
+          if (typeof u.cursor.idx === 'number' && u.cursor.idx >= 0) onScrubIndex(u.cursor.idx);
+        }
+      ]
+    } : undefined,
     scales: {
       x: { time: !isDistribution },
       y: { auto: true }
@@ -56,7 +64,7 @@ function buildOptions(kind: ChartKind, series: UPlotSeries[], width: number): Op
   };
 }
 
-export function UPlotChart({ data, series, kind, ariaLabel, reducedMotion, className }: UPlotChartProps) {
+export function UPlotChart({ data, series, kind, ariaLabel, reducedMotion, className, onScrubIndex }: UPlotChartProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<uPlot | null>(null);
 
@@ -70,7 +78,7 @@ export function UPlotChart({ data, series, kind, ariaLabel, reducedMotion, class
     if (!host) return;
 
     const width = Math.max(280, Math.floor(host.getBoundingClientRect().width || 320));
-    const options = buildOptions(kind, series, width);
+    const options = buildOptions(kind, series, width, onScrubIndex);
     const chart = new uPlot(options, data as unknown as uPlot.AlignedData, host);
     chartRef.current = chart;
 
@@ -85,7 +93,7 @@ export function UPlotChart({ data, series, kind, ariaLabel, reducedMotion, class
       chart.destroy();
       chartRef.current = null;
     };
-  }, [chartKey]);
+  }, [chartKey, onScrubIndex]);
 
   useEffect(() => {
     if (!chartRef.current) return;
