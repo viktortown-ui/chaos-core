@@ -228,3 +228,34 @@ button:disabled { opacity: 0.6; }
     animation: none !important;
   }
 }
+
+.sim-screen .preset-row {
+  flex-wrap: wrap;
+}
+
+.sim-preset-row button {
+  font-size: 0.85rem;
+}
+
+.sim-tooltip {
+  background: #0d1320;
+  border: 1px solid #2a3348;
+}
+
+.sim-templates-row button {
+  font-size: 0.75rem;
+}
+
+.sim-screen.reduce-motion .card,
+.sim-screen.reduce-motion button {
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sim-screen .card,
+  .sim-screen button {
+    transition: none !important;
+    animation: none !important;
+  }
+}

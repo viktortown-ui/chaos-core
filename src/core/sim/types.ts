@@ -62,6 +62,7 @@ export interface SimulationResult {
   endingScore: Distribution;
   scorePercentiles: Percentiles;
   scoreTrajectory: TrajectoryPoint[];
+  endingScoresRaw: number[];
   successRatio: number;
   riskEvents: RiskEvents;
   topLevers: LeverKey[];
@@ -74,6 +75,7 @@ export interface MonteCarloConfig {
   baseState: StateVector;
   actionPolicy: (state: StateVector, stepIndex: number) => Action;
   scenarioParams: ScenarioParams;
+  successThreshold?: number;
   progressEvery?: number;
   onProgress?: (completedRuns: number, partialResult: SimulationResult) => void;
   shouldAbort?: () => boolean;

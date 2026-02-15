@@ -111,7 +111,8 @@ export function HistoryScreen() {
         strategy: 'balance' as StrategyMode,
         uncertainty,
         riskAppetite,
-        blackSwanEnabled: true
+        blackSwanEnabled: true,
+        successThreshold: Math.max(80, data.xp * 0.45 + (data.stats.strength + data.stats.intelligence + data.stats.wisdom + data.stats.dexterity) * 5)
       };
 
       worker.postMessage({ type: 'start', id: requestId, config: payload });

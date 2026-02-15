@@ -57,6 +57,7 @@ function emptyResult(horizonMonths: number, dtDays: number): SimulationResult {
     endingScore: buildDistribution([]),
     scorePercentiles: { p10: 0, p25: 0, p50: 0, p75: 0, p90: 0 },
     scoreTrajectory: [],
+    endingScoresRaw: [],
     successRatio: 0,
     riskEvents: { stressBreaks: 0, drawdownsOver20: 0, blackSwans: 0 },
     topLevers: ['strategy', 'riskAppetite', 'uncertainty']
@@ -122,6 +123,7 @@ function aggregateResult(
     endingScore: buildDistribution(endingScoreValues),
     scorePercentiles,
     scoreTrajectory: buildTrajectory(scoreRunsByStep, dtDays),
+    endingScoresRaw: [...endingScoreValues],
     successRatio: completedRuns === 0 ? 0 : successfulRuns / completedRuns,
     riskEvents: {
       stressBreaks,
@@ -156,7 +158,7 @@ function initInternalState(): InternalState {
   };
 }
 
-function runSingle(config: MonteCarloConfig, state: InternalState, rootRngSeed: number, run: number, steps: number): void {
+function runSingle(config: MonteCarloConfig, state: InternalState, rootRngSeed: number, run: number, steps: number, successThreshold: number): void {
   const rng = createRng(rootRngSeed).fork(run + 1);
   let simState = { ...config.baseState };
 
@@ -175,7 +177,7 @@ function runSingle(config: MonteCarloConfig, state: InternalState, rootRngSeed: 
   state.endingCapitalValues.push(simState.capital);
   state.endingResilienceValues.push(simState.resilience);
   state.endingScoreValues.push(endingScore);
-  if (endingScore >= scoreState(config.baseState)) {
+  if (endingScore >= successThreshold) {
     state.successfulRuns += 1;
   }
 }
@@ -206,10 +208,11 @@ export function runMonteCarlo(config: MonteCarloConfig): SimulationResult {
 
   const state = initInternalState();
   const rootSeed = config.scenarioParams.seed;
+  const successThreshold = config.successThreshold ?? scoreState(config.baseState);
 
   for (let run = 0; run < runs; run += 1) {
     if (config.shouldAbort?.()) return finalize(config, run, state, topLevers);
-    runSingle(config, state, rootSeed, run, steps);
+    runSingle(config, state, rootSeed, run, steps, successThreshold);
     const completed = run + 1;
     if (config.onProgress && (completed % progressEvery === 0 || completed === runs)) {
       config.onProgress(completed, finalize(config, completed, state, topLevers));
@@ -228,10 +231,11 @@ export async function runMonteCarloAsync(config: MonteCarloConfig): Promise<Simu
 
   const state = initInternalState();
   const rootSeed = config.scenarioParams.seed;
+  const successThreshold = config.successThreshold ?? scoreState(config.baseState);
 
   for (let run = 0; run < runs; run += 1) {
     if (config.shouldAbort?.()) return finalize(config, run, state, topLevers);
-    runSingle(config, state, rootSeed, run, steps);
+    runSingle(config, state, rootSeed, run, steps, successThreshold);
     const completed = run + 1;
     if (completed % progressEvery === 0 || completed === runs) {
       if (config.onProgress) {

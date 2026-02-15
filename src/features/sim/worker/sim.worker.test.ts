@@ -19,7 +19,8 @@ describe('sim worker protocol', () => {
         strategy: 'balance',
         uncertainty: 0.5,
         riskAppetite: 0.5,
-        blackSwanEnabled: false
+        blackSwanEnabled: false,
+        successThreshold: 120
       }
     });
 
@@ -45,7 +46,8 @@ describe('sim worker protocol', () => {
         strategy: 'attack',
         uncertainty: 1,
         riskAppetite: 1,
-        blackSwanEnabled: true
+        blackSwanEnabled: true,
+        successThreshold: 120
       }
     });
 
@@ -53,5 +55,31 @@ describe('sim worker protocol', () => {
     await startPromise;
 
     expect(messages.some((message) => message.type === 'cancelled' && message.id === 'job-2')).toBe(true);
+  });
+
+  it('returns sensitivity suggestions', async () => {
+    const messages: SimWorkerResponse[] = [];
+    const handler = createSimWorkerHandler({ postMessage: (payload) => messages.push(payload) });
+
+    await handler({
+      type: 'sensitivity',
+      id: 'job-3',
+      config: {
+        runs: 1000,
+        horizonMonths: 12,
+        dtDays: 5,
+        seed: 7,
+        baseState: { capital: 100, resilience: 30, momentum: 20, stress: 20 },
+        strategy: 'balance',
+        uncertainty: 0.5,
+        riskAppetite: 0.5,
+        blackSwanEnabled: true,
+        successThreshold: 120
+      }
+    });
+
+    const done = messages.find((message) => message.type === 'sensitivity-done');
+    expect(done).toBeTruthy();
+    if (done?.type === 'sensitivity-done') expect(done.levers).toHaveLength(3);
   });
 });
