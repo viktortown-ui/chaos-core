@@ -1,6 +1,6 @@
 import { createRng } from './rng';
 import { scoreState, step } from './model';
-import { Distribution, LeverKey, MonteCarloConfig, Percentiles, SimulationResult } from './types';
+import { Distribution, LeverKey, MonteCarloConfig, Percentiles, SimulationResult, TrajectoryPoint } from './types';
 
 const DEFAULT_RUNS = 10_000;
 const DEFAULT_BATCH = 250;
@@ -56,6 +56,7 @@ function emptyResult(horizonMonths: number, dtDays: number): SimulationResult {
     endingResilience: buildDistribution([]),
     endingScore: buildDistribution([]),
     scorePercentiles: { p10: 0, p25: 0, p50: 0, p75: 0, p90: 0 },
+    scoreTrajectory: [],
     successRatio: 0,
     riskEvents: { stressBreaks: 0, drawdownsOver20: 0, blackSwans: 0 },
     topLevers: ['strategy', 'riskAppetite', 'uncertainty']
@@ -71,10 +72,27 @@ function deriveTopLevers(config: MonteCarloConfig): LeverKey[] {
   return levers.slice(0, 3);
 }
 
+
+function buildTrajectory(
+  scoreRunsByStep: number[][],
+  dtDays: number
+): TrajectoryPoint[] {
+  if (scoreRunsByStep.length === 0) return [];
+
+  return scoreRunsByStep.map((scores, stepIndex) => {
+    const sorted = [...scores].sort((a, b) => a - b);
+    return {
+      dayOffset: (stepIndex + 1) * dtDays,
+      p10: percentile(sorted, 0.1),
+      p50: percentile(sorted, 0.5),
+      p90: percentile(sorted, 0.9)
+    };
+  });
+}
+
 function aggregateResult(
   completedRuns: number,
   horizonMonths: number,
-  dtDays: number,
   endingCapitalValues: number[],
   endingResilienceValues: number[],
   endingScoreValues: number[],
@@ -82,7 +100,9 @@ function aggregateResult(
   stressBreaks: number,
   drawdowns: number,
   blackSwans: number,
-  topLevers: LeverKey[]
+  topLevers: LeverKey[],
+  scoreRunsByStep: number[][],
+  dtDays: number
 ): SimulationResult {
   const sortedScores = [...endingScoreValues].sort((a, b) => a - b);
   const scorePercentiles: Percentiles = {
@@ -101,6 +121,7 @@ function aggregateResult(
     endingResilience: buildDistribution(endingResilienceValues),
     endingScore: buildDistribution(endingScoreValues),
     scorePercentiles,
+    scoreTrajectory: buildTrajectory(scoreRunsByStep, dtDays),
     successRatio: completedRuns === 0 ? 0 : successfulRuns / completedRuns,
     riskEvents: {
       stressBreaks,
@@ -119,6 +140,7 @@ interface InternalState {
   stressBreaks: number;
   drawdowns: number;
   blackSwans: number;
+  scoreRunsByStep: number[][];
 }
 
 function initInternalState(): InternalState {
@@ -129,7 +151,8 @@ function initInternalState(): InternalState {
     successfulRuns: 0,
     stressBreaks: 0,
     drawdowns: 0,
-    blackSwans: 0
+    blackSwans: 0,
+    scoreRunsByStep: []
   };
 }
 
@@ -138,9 +161,11 @@ function runSingle(config: MonteCarloConfig, state: InternalState, rootRngSeed: 
   let simState = { ...config.baseState };
 
   for (let stepIndex = 0; stepIndex < steps; stepIndex += 1) {
+    if (!state.scoreRunsByStep[stepIndex]) state.scoreRunsByStep[stepIndex] = [];
     const action = config.actionPolicy(simState, stepIndex);
     const outcome = step(simState, action, config.dtDays, config.scenarioParams, rng);
     simState = outcome.state;
+    state.scoreRunsByStep[stepIndex].push(scoreState(simState));
     if (outcome.riskFlags.stressBreak) state.stressBreaks += 1;
     if (outcome.riskFlags.drawdownOver20) state.drawdowns += 1;
     if (outcome.riskFlags.blackSwan) state.blackSwans += 1;
@@ -159,7 +184,6 @@ function finalize(config: MonteCarloConfig, completedRuns: number, state: Intern
   return aggregateResult(
     completedRuns,
     config.horizonMonths,
-    config.dtDays,
     state.endingCapitalValues,
     state.endingResilienceValues,
     state.endingScoreValues,
@@ -167,7 +191,9 @@ function finalize(config: MonteCarloConfig, completedRuns: number, state: Intern
     state.stressBreaks,
     state.drawdowns,
     state.blackSwans,
-    topLevers
+    topLevers,
+    state.scoreRunsByStep,
+    config.dtDays
   );
 }
 

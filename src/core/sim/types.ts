@@ -44,6 +44,13 @@ export interface RiskEvents {
   blackSwans: number;
 }
 
+export interface TrajectoryPoint {
+  dayOffset: number;
+  p10: number;
+  p50: number;
+  p90: number;
+}
+
 export type LeverKey = 'riskAppetite' | 'uncertainty' | 'strategy' | 'horizon' | 'blackSwanShield';
 
 export interface SimulationResult {
@@ -54,6 +61,7 @@ export interface SimulationResult {
   endingResilience: Distribution;
   endingScore: Distribution;
   scorePercentiles: Percentiles;
+  scoreTrajectory: TrajectoryPoint[];
   successRatio: number;
   riskEvents: RiskEvents;
   topLevers: LeverKey[];
