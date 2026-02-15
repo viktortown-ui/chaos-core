@@ -31,6 +31,14 @@ const presets: Preset[] = [
 
 const runsCount = 10_000;
 
+const presetIcons: Record<PresetKey, string> = {
+  boost: '⚡',
+  stabilize: '🛡',
+  storm: '☄',
+  focus: '◎',
+  diversify: '✧'
+};
+
 function outOfTen(value: number): number {
   return Math.round(value * 10);
 }
@@ -327,97 +335,116 @@ export function SimulationScreen() {
     <section className={`stack sim-screen cosmos-hud${reducedMotion ? ' reduce-motion' : ''}`}>
       <div className="simBackdrop" aria-hidden="true" />
       <h2>{t('simulationTitle', language)}</h2>
-      <div className="sim-inline-intro">
-        <p>{t('simulationMeaningLine', language)}</p>
-        <details>
-          <summary aria-label={t('simulationWhatIsThis', language)}>ⓘ</summary>
-          <p>{t('simulationWhatIsThisBody', language)}</p>
-        </details>
-      </div>
-
-      <div className="cosPanel cosPanel--tight stack">
-        <div className="sim-dock-row" role="group" aria-label={t('simulationLeversDockTitle', language)}>
-          {presets.map((preset) => (
-            <button key={preset.key} className={`cosBtn cosBtn--ghost sim-dock-btn${selectedPreset === preset.key ? ' sim-dock-btn-active' : ''}`} onClick={() => applyPreset(preset.key)}>
-              <span aria-hidden="true">✦</span>
-              <span>{t(`preset_${preset.key}` as never, language)}</span>
-            </button>
-          ))}
+      <div className="cosShell stack">
+        <div className="sim-inline-intro">
+          <p>{t('simulationMeaningLine', language)}</p>
+          <details>
+            <summary aria-label={t('simulationWhatIsThis', language)}>ⓘ</summary>
+            <p>{t('simulationWhatIsThisBody', language)}</p>
+          </details>
         </div>
-        <p>{t('simulationTradeoff', language)}: {t(selectedTradeoff, language)}</p>
-      </div>
 
-      <div className={`cosPanel cosPanel--hero stack sim-hero${heroPulse ? ' sim-hero-pulse' : ''}${reducedMotion ? ' no-pulse' : ''}`}>
-        <div className="sim-hero-layout">
-          <div className="sim-hero-core">
-            <CoreOrb reducedMotion={reducedMotion} score={successMeter} />
-            <p className="sim-hero-core-title">{t('simulationHeroCoreTitle', language)}</p>
+        <div className={`cosHero stack sim-hero${heroPulse ? ' sim-hero-pulse' : ''}${reducedMotion ? ' no-pulse' : ''}`}>
+          <div className="sim-chart-head">
+            <strong>{t('simulationCoreConsole', language)}</strong>
+            <span className="cosChip">{t('simulationHeroCoreTitle', language)}</span>
           </div>
-          <div className="sim-hero-main stack">
-            <strong>{t('simulationHeroTitle', language)}</strong>
-            {!result && <p>{t('simulationHeroEmpty', language)}</p>}
-            {result && (
-              <>
-                <p className="sim-hero-status">{t(statusKey, language)}</p>
-                <p className="sim-hero-meter">{t(meterLabelKey, language)}</p>
-                <div className="sim-hero-metrics">
-                  <span className="cosChip">{t('simulationThresholdHeadroom', language)}: <strong>{thresholdHeadroom}</strong></span>
-                  <span className="cosChip">{t('simulationSpread', language)}: <strong>{spread}</strong></span>
-                </div>
-              </>
-            )}
-            <div className="preset-row sim-primary-actions">
-              <button className="cosBtn cosBtn--accent" onClick={applyBestLever} disabled={!sensitivity[0]}>{t('simulationApplyBestLever', language)}</button>
-              <button className="cosBtn" onClick={makeQuest}>{t('simulationMakeQuest', language)}</button>
+          <div className="sim-hero-layout">
+            <div className="sim-hero-core">
+              <CoreOrb reducedMotion={reducedMotion} score={successMeter} />
+              <p className="sim-hero-core-title">{t('simulationHeroCoreTitle', language)}</p>
+            </div>
+            <div className="sim-hero-main stack">
+              <strong>{t('simulationHeroTitle', language)}</strong>
+              {!result && <p>{t('simulationHeroEmpty', language)}</p>}
+              {result && (
+                <>
+                  <p className="sim-hero-status">{t(statusKey, language)}</p>
+                  <p className="sim-hero-meter">{t(meterLabelKey, language)}</p>
+                  <div className="sim-hero-metrics">
+                    <span className="cosChip">{t('simulationThresholdHeadroom', language)}: <strong>{thresholdHeadroom}</strong></span>
+                    <span className="cosChip">{t('simulationSpread', language)}: <strong>{spread}</strong></span>
+                  </div>
+                </>
+              )}
+              <div className="preset-row sim-primary-actions">
+                <button className="cosBtn cosBtn--accent" onClick={applyBestLever} disabled={!sensitivity[0]}>{t('simulationApplyBestLever', language)}</button>
+                <button className="cosBtn" onClick={makeQuest}>{t('simulationMakeQuest', language)}</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="cosPanel stack">
-        <label>{t('simulationHorizon', language)} <span className="cosChip">{horizonMonths}</span>
-          <input type="range" min={6} max={30} value={horizonMonths} onChange={(e) => setHorizonMonths(Number(e.target.value))} />
-        </label>
-        <label>{t('simulationThreshold', language)} <span className="cosChip">{successThreshold}</span>
-          <input type="range" min={80} max={180} step={1} value={successThreshold} onChange={(e) => setSuccessThreshold(Number(e.target.value))} />
-        </label>
-        <small>{t('simulationThresholdHelp', language)}</small>
+        <div className="cosDivider" aria-hidden="true" />
 
-        <label>{t('simulationUncertainty', language)} <span className="cosChip">{t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}</span> <span title={t('simulationUncertaintyTooltip', language)} className="sim-help-dot">?</span>
-          <input type="range" min={0} max={4} step={1} value={uncertaintyLevel} onChange={(e) => setUncertainty(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
-        </label>
-        <small>{t('simulationEffectFutureFan', language)}: {t(uncertaintyEffectKey(uncertaintyLevel), language)}</small>
-
-        <label>{t('simulationRiskAppetite', language)} <span className="cosChip">{t(`simulationRiskLevel${riskLevel + 1}` as never, language)}</span> <span title={t('simulationRiskTooltip', language)} className="sim-help-dot">?</span>
-          <input type="range" min={0} max={4} step={1} value={riskLevel} onChange={(e) => setRiskAppetite(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
-        </label>
-        <small>{t('simulationEffectRiskPrice', language)}: {t(riskEffectKey(riskLevel), language)}</small>
-
-        <label>{t('simulationStrategy', language)}
-          <select value={strategy} onChange={(e) => setStrategy(e.target.value as StrategyMode)}>
-            <option value="attack">{t('strategyAttack', language)}</option>
-            <option value="balance">{t('strategyBalance', language)}</option>
-            <option value="defense">{t('strategyDefense', language)}</option>
-          </select>
-        </label>
-        <label>
-          <input type="checkbox" checked={blackSwanEnabled} onChange={(e) => setBlackSwanEnabled(e.target.checked)} />
-          {t('simulationBlackSwan', language)}
-        </label>
-        <div className="preset-row">
-          <button className="cosBtn" onClick={startSimulation}>{isRunning ? t('simulationRunning', language) : t('simulationRun', language)}</button>
-          <button className="cosBtn cosBtn--ghost" onClick={saveCurrentTemplate}>{t('simulationSaveTemplate', language)}</button>
-          <button className="cosBtn cosBtn--ghost" onClick={() => applyPreset('stabilize')}>{t('simulationReset', language)}</button>
+        <div className="cosDock stack">
+          <div className="sim-chart-head">
+            <strong>{t('simulationLeversDockTitle', language)}</strong>
+            <span className="cosChip">{t('simulationDockSubtitle', language)}</span>
+          </div>
+          <div className="sim-dock-row" role="group" aria-label={t('simulationLeversDockTitle', language)}>
+            {presets.map((preset) => (
+              <button key={preset.key} className={`cosBtn cosBtn--ghost sim-dock-btn${selectedPreset === preset.key ? ' sim-dock-btn-active' : ''}`} onClick={() => applyPreset(preset.key)}>
+                <span aria-hidden="true">{presetIcons[preset.key]}</span>
+                <span>{t(`preset_${preset.key}` as never, language)}</span>
+              </button>
+            ))}
+          </div>
+          <p>{t('simulationTradeoff', language)}: {t(selectedTradeoff, language)}</p>
         </div>
-        {templates.length > 0 && <div className="preset-row sim-templates-row">{templates.slice(0, 3).map((template) => <button className="cosBtn cosBtn--ghost" key={template.id} onClick={() => applyTemplate(template)}>{template.name}</button>)}</div>}
-        {isRunning && <p>{t('simulationProgress', language)}: {Math.round(progress * 100)}%</p>}
-      </div>
+
+        <div className="cosDivider" aria-hidden="true" />
+
+        <div className="stack">
+          <div className="cosHudRow">
+            <label>{t('simulationHorizon', language)} <span className="cosChip">{horizonMonths}</span>
+              <input type="range" min={6} max={30} value={horizonMonths} onChange={(e) => setHorizonMonths(Number(e.target.value))} />
+            </label>
+            <label>{t('simulationThreshold', language)} <span className="cosChip">{successThreshold}</span>
+              <input type="range" min={80} max={180} step={1} value={successThreshold} onChange={(e) => setSuccessThreshold(Number(e.target.value))} />
+            </label>
+          </div>
+          <small>{t('simulationThresholdHelp', language)}</small>
+
+          <div className="cosHudRow">
+            <label>{t('simulationUncertainty', language)} <span className="cosChip">{t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}</span> <span title={t('simulationUncertaintyTooltip', language)} className="sim-help-dot">?</span>
+              <input type="range" min={0} max={4} step={1} value={uncertaintyLevel} onChange={(e) => setUncertainty(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
+              <small>{t('simulationEffectFutureFan', language)}: {t(uncertaintyEffectKey(uncertaintyLevel), language)}</small>
+            </label>
+            <label>{t('simulationRiskAppetite', language)} <span className="cosChip">{t(`simulationRiskLevel${riskLevel + 1}` as never, language)}</span> <span title={t('simulationRiskTooltip', language)} className="sim-help-dot">?</span>
+              <input type="range" min={0} max={4} step={1} value={riskLevel} onChange={(e) => setRiskAppetite(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
+              <small>{t('simulationEffectRiskPrice', language)}: {t(riskEffectKey(riskLevel), language)}</small>
+            </label>
+          </div>
+
+          <div className="cosHudRow">
+            <label>{t('simulationStrategy', language)}
+              <select value={strategy} onChange={(e) => setStrategy(e.target.value as StrategyMode)}>
+                <option value="attack">{t('strategyAttack', language)}</option>
+                <option value="balance">{t('strategyBalance', language)}</option>
+                <option value="defense">{t('strategyDefense', language)}</option>
+              </select>
+            </label>
+            <label>
+              <input type="checkbox" checked={blackSwanEnabled} onChange={(e) => setBlackSwanEnabled(e.target.checked)} />
+              {t('simulationBlackSwan', language)}
+            </label>
+          </div>
+          <div className="preset-row">
+            <button className="cosBtn" onClick={startSimulation}>{isRunning ? t('simulationRunning', language) : t('simulationRun', language)}</button>
+            <button className="cosBtn cosBtn--ghost" onClick={saveCurrentTemplate}>{t('simulationSaveTemplate', language)}</button>
+            <button className="cosBtn cosBtn--ghost" onClick={() => applyPreset('stabilize')}>{t('simulationReset', language)}</button>
+          </div>
+          {templates.length > 0 && <div className="preset-row sim-templates-row">{templates.slice(0, 3).map((template) => <button className="cosBtn cosBtn--ghost" key={template.id} onClick={() => applyTemplate(template)}>{template.name}</button>)}</div>}
+          {isRunning && <p>{t('simulationProgress', language)}: {Math.round(progress * 100)}%</p>}
+        </div>
 
       {result && (
         <>
-          <div className="cosPanel stack">
+          <div className="cosDivider" aria-hidden="true" />
+          <div className="cosOracleFrame stack">
             <div className="sim-chart-head">
-              <strong>{t('simulationTrajectoryTitle', language)}</strong>
+              <strong>{t('simulationOracleScreen', language)}</strong>
               {tooltip && <span className="cosChip">{t('simulationPinnedMonthBadge', language)} {tooltip.month}</span>}
             </div>
             <UPlotChart
@@ -446,7 +473,7 @@ export function SimulationScreen() {
               <span className="cosChip sim-threshold-chip"><i className="chip threshold" />{t('simulationThreshold', language)} {successThreshold}</span>
             </div>
             {tooltip && (
-              <div className="cosPanel sim-tooltip">
+              <div className="sim-tooltip">
                 <strong>{t('simulationTooltipMonth', language)} {tooltip.month}</strong>
                 {pinnedIndex != null && <span className="sim-pinned-pill">{t('simulationPinnedMonth', language)} {tooltip.month}</span>}
                 <p>{t('scenarioBad', language)}: {Math.round(tooltip.point.p10)}</p>
@@ -456,7 +483,8 @@ export function SimulationScreen() {
             )}
           </div>
 
-          <details className="cosPanel stack" open>
+          <div className="cosDivider" aria-hidden="true" />
+          <details className="stack sim-details" open>
             <summary>{t('simulationDetails', language)}</summary>
             <strong>{t('simulationTopLevers', language)}</strong>
             <ol>
@@ -481,24 +509,26 @@ export function SimulationScreen() {
                 <div key={index} className="sim-bar" style={{ height: `${height}%` }} />
               ))}
             </div>
-
-            <details>
-              <summary>{t('simulationAdvanced', language)}</summary>
-              <p><code>{t('simulationRawMedian', language)}: {Math.round(result.scorePercentiles.p50)}</code></p>
-              <p><code>{t('simulationRawP10', language)}: {Math.round(result.scorePercentiles.p10)}</code></p>
-              <p><code>{t('simulationRawP90', language)}: {Math.round(result.scorePercentiles.p90)}</code></p>
-              <p><code>{t('simulationRawUncertainty', language)}: {uncertainty.toFixed(2)}</code></p>
-              <p><code>{t('simulationRawRiskAppetite', language)}: {riskAppetite.toFixed(2)}</code></p>
-            </details>
           </details>
 
-          <div className="cosPanel cosPanel--tight stack">
+          <details className="stack sim-details">
+            <summary>{t('simulationAdvanced', language)}</summary>
+            <p><code>{t('simulationRawMedian', language)}: {Math.round(result.scorePercentiles.p50)}</code></p>
+            <p><code>{t('simulationRawP10', language)}: {Math.round(result.scorePercentiles.p10)}</code></p>
+            <p><code>{t('simulationRawP90', language)}: {Math.round(result.scorePercentiles.p90)}</code></p>
+            <p><code>{t('simulationRawUncertainty', language)}: {uncertainty.toFixed(2)}</code></p>
+            <p><code>{t('simulationRawRiskAppetite', language)}: {riskAppetite.toFixed(2)}</code></p>
+          </details>
+
+          <div className="cosDivider" aria-hidden="true" />
+          <div className="stack">
             <div className="preset-row">
               <button className="cosBtn cosBtn--ghost" onClick={() => { if (result) { saveBaseline({ label: new Date().toLocaleTimeString(), result: { scoreTrajectory: result.scoreTrajectory, horizonMonths: result.horizonMonths, runs: result.runs }, savedAtISO: new Date().toISOString() }); setBaseline(loadBaseline()); } }}>{t('simulationCompare', language)}</button>
             </div>
           </div>
         </>
       )}
+      </div>
     </section>
   );
 }

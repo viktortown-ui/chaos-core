@@ -385,11 +385,14 @@ button:disabled { opacity: 0.6; }
 /* Cosmos HUD: Simulation */
 .cosmos-hud {
   --cos-bg: #060a13;
-  --cos-panel: rgba(13, 20, 34, 0.62);
-  --cos-stroke: rgba(153, 188, 236, 0.22);
-  --cos-glow: rgba(94, 191, 255, 0.22);
-  --cos-accent: #efb45a;
-  --cos-cyan: #71e8ff;
+  --cos-panel: rgba(10, 18, 34, 0.62);
+  --cos-stroke-soft: rgba(160, 198, 252, 0.22);
+  --cos-glow: rgba(94, 191, 255, 0.24);
+  --cos-accentA: #74d2ff;
+  --cos-accentB: #ffbe72;
+  --cos-accentC: #7af1bd;
+  --cos-text-hi: #e9f4ff;
+  --cos-text-lo: #9ab7d0;
   position: relative;
   isolation: isolate;
 }
@@ -429,16 +432,34 @@ button:disabled { opacity: 0.6; }
   mix-blend-mode: screen;
 }
 
-.cosPanel {
-  background: linear-gradient(180deg, rgba(19, 29, 46, 0.7), var(--cos-panel));
-  border: 1px solid var(--cos-stroke);
-  border-radius: 18px;
+.cosShell {
   padding: 0.9rem;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(16, 26, 45, 0.84), var(--cos-panel));
+  border: 1px solid var(--cos-stroke-soft);
   box-shadow: inset 0 1px 0 rgba(223, 240, 255, 0.06), 0 16px 24px rgba(0, 0, 0, 0.24), 0 0 20px rgba(28, 113, 163, 0.1);
 }
 
-.cosPanel--hero { padding: 1rem; }
-.cosPanel--tight { padding: 0.75rem; }
+@supports (backdrop-filter: blur(8px)) {
+  .cosShell {
+    backdrop-filter: blur(14px) saturate(120%);
+    background: linear-gradient(180deg, rgba(16, 26, 45, 0.68), var(--cos-panel));
+  }
+}
+
+.cosHero,
+.cosDock,
+.cosOracleFrame,
+.sim-details {
+  padding: 0.2rem 0;
+}
+
+.cosDivider {
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--cos-stroke-soft), transparent);
+  box-shadow: 0 0 12px var(--cos-glow);
+}
 
 .cosChip {
   display: inline-flex;
@@ -448,7 +469,7 @@ button:disabled { opacity: 0.6; }
   border-radius: 999px;
   font-size: 0.78rem;
   background: rgba(109, 163, 228, 0.12);
-  color: #d8e6ff;
+  color: var(--cos-text-hi);
 }
 
 .cosBtn {
@@ -459,12 +480,53 @@ button:disabled { opacity: 0.6; }
 }
 
 .cosBtn--accent {
-  border-color: rgba(243, 186, 108, 0.52);
+  border-color: color-mix(in srgb, var(--cos-accentB) 55%, #fff0 45%);
   background: linear-gradient(180deg, rgba(252, 186, 94, 0.35), rgba(151, 92, 36, 0.32));
 }
 
 .cosBtn--ghost {
   background: rgba(62, 82, 123, 0.22);
+}
+
+.cosHudRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.8rem;
+  padding: 0.35rem 0;
+}
+
+.cosHudRow label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--cos-text-hi);
+}
+
+.cosHudRow input[type='range'] {
+  accent-color: var(--cos-accentA);
+  filter: drop-shadow(0 0 6px var(--cos-glow));
+}
+
+.cosHudRow small,
+.sim-hero-meter,
+.sim-legend-hint,
+.sim-hero-core-title,
+.sim-inline-intro p,
+.sim-screen small {
+  color: var(--cos-text-lo);
+}
+
+.sim-inline-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.sim-inline-intro p { margin: 0.1rem 0; }
+
+.sim-inline-intro details summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.9rem;
 }
 
 .sim-hero-layout {
@@ -475,9 +537,7 @@ button:disabled { opacity: 0.6; }
 
 .sim-hero-core { text-align: center; }
 .sim-orb { width: 132px; height: 132px; }
-.sim-hero-core-title { margin: 0; color: #a9cbe5; }
-.sim-hero-status { margin: 0; font-size: 1.4rem; font-weight: 700; }
-.sim-hero-meter { margin: 0; color: #b6d9ea; }
+.sim-hero-status { margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--cos-text-hi); }
 .sim-hero-metrics { display: flex; flex-wrap: wrap; gap: 0.45rem; }
 
 .sim-dock-row {
@@ -490,9 +550,10 @@ button:disabled { opacity: 0.6; }
   font-size: 0.8rem;
   padding: 0.55rem;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
+  gap: 0.2rem;
 }
 
 .sim-dock-btn-active {
@@ -507,13 +568,30 @@ button:disabled { opacity: 0.6; }
   gap: 0.5rem;
 }
 
-.sim-oracle-frame .uplot-touch-overlay { inset: -8px; }
+.sim-oracle-frame .uplot-touch-overlay { inset: -8px; touch-action: pan-y; }
+
+.sim-tooltip {
+  background: linear-gradient(180deg, rgba(18, 35, 59, 0.92), rgba(10, 20, 35, 0.9));
+  border: 1px solid var(--cos-stroke-soft);
+  border-radius: 14px;
+  padding: 0.6rem;
+  box-shadow: 0 0 20px rgba(116, 221, 255, 0.18);
+}
+
+.sim-details {
+  border: 0;
+}
+
+.sim-details > summary {
+  cursor: pointer;
+  color: var(--cos-text-hi);
+}
 
 .sim-hero-pulse { animation: heroPulseHud 220ms ease-out; }
 @keyframes heroPulseHud {
-  from { box-shadow: inset 0 1px 0 rgba(223, 240, 255, 0.06), 0 0 0 rgba(255, 193, 111, 0); }
-  50% { box-shadow: inset 0 1px 0 rgba(223, 240, 255, 0.06), 0 0 22px rgba(255, 193, 111, 0.5); }
-  to { box-shadow: inset 0 1px 0 rgba(223, 240, 255, 0.06), 0 0 0 rgba(255, 193, 111, 0); }
+  from { box-shadow: 0 0 0 rgba(255, 193, 111, 0); }
+  50% { box-shadow: 0 0 22px rgba(255, 193, 111, 0.5); }
+  to { box-shadow: 0 0 0 rgba(255, 193, 111, 0); }
 }
 
 .cosmos-hud.reduce-motion .sim-hero-pulse,
@@ -536,4 +614,5 @@ button:disabled { opacity: 0.6; }
 @media (min-width: 820px) {
   .sim-hero-layout { grid-template-columns: 180px 1fr; align-items: center; }
   .sim-dock-row { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .cosHudRow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
