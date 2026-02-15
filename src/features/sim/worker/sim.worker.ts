@@ -38,8 +38,8 @@ async function evaluateSensitivity(config: SimConfigPayload): Promise<Sensitivit
   for (const candidate of candidates) {
     const result = await runOnce(candidate.next, 1200);
     const successDelta = Math.round((result.successRatio - base.successRatio) * 10);
-    const drawdownBase = pct(base.riskEvents.drawdownsOver20, Math.max(1, base.runs));
-    const drawdownNext = pct(result.riskEvents.drawdownsOver20, Math.max(1, result.runs));
+    const drawdownBase = pct(base.riskEvents.drawdownsOver20.worldsWithEvent, Math.max(1, base.runs));
+    const drawdownNext = pct(result.riskEvents.drawdownsOver20.worldsWithEvent, Math.max(1, result.runs));
     const drawdownDelta = Math.round((drawdownNext - drawdownBase) * 100);
     const score = successDelta * 2 - drawdownDelta - candidate.cost;
     scored.push({

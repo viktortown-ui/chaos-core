@@ -59,7 +59,11 @@ function emptyResult(horizonMonths: number, dtDays: number): SimulationResult {
     scoreTrajectory: [],
     endingScoresRaw: [],
     successRatio: 0,
-    riskEvents: { stressBreaks: 0, drawdownsOver20: 0, blackSwans: 0 },
+    riskEvents: {
+      stressBreaks: { worldsWithEvent: 0, totalEvents: 0 },
+      drawdownsOver20: { worldsWithEvent: 0, totalEvents: 0 },
+      blackSwans: { worldsWithEvent: 0, totalEvents: 0 }
+    },
     topLevers: ['strategy', 'riskAppetite', 'uncertainty']
   };
 }
@@ -98,9 +102,12 @@ function aggregateResult(
   endingResilienceValues: number[],
   endingScoreValues: number[],
   successfulRuns: number,
-  stressBreaks: number,
-  drawdowns: number,
-  blackSwans: number,
+  stressBreakWorlds: number,
+  stressBreakEvents: number,
+  drawdownWorlds: number,
+  drawdownEvents: number,
+  blackSwanWorlds: number,
+  blackSwanEvents: number,
   topLevers: LeverKey[],
   scoreRunsByStep: number[][],
   dtDays: number
@@ -126,9 +133,9 @@ function aggregateResult(
     endingScoresRaw: [...endingScoreValues],
     successRatio: completedRuns === 0 ? 0 : successfulRuns / completedRuns,
     riskEvents: {
-      stressBreaks,
-      drawdownsOver20: drawdowns,
-      blackSwans
+      stressBreaks: { worldsWithEvent: stressBreakWorlds, totalEvents: stressBreakEvents },
+      drawdownsOver20: { worldsWithEvent: drawdownWorlds, totalEvents: drawdownEvents },
+      blackSwans: { worldsWithEvent: blackSwanWorlds, totalEvents: blackSwanEvents }
     },
     topLevers
   };
@@ -139,9 +146,12 @@ interface InternalState {
   endingResilienceValues: number[];
   endingScoreValues: number[];
   successfulRuns: number;
-  stressBreaks: number;
-  drawdowns: number;
-  blackSwans: number;
+  stressBreakWorlds: number;
+  stressBreakEvents: number;
+  drawdownWorlds: number;
+  drawdownEvents: number;
+  blackSwanWorlds: number;
+  blackSwanEvents: number;
   scoreRunsByStep: number[][];
 }
 
@@ -151,9 +161,12 @@ function initInternalState(): InternalState {
     endingResilienceValues: [],
     endingScoreValues: [],
     successfulRuns: 0,
-    stressBreaks: 0,
-    drawdowns: 0,
-    blackSwans: 0,
+    stressBreakWorlds: 0,
+    stressBreakEvents: 0,
+    drawdownWorlds: 0,
+    drawdownEvents: 0,
+    blackSwanWorlds: 0,
+    blackSwanEvents: 0,
     scoreRunsByStep: []
   };
 }
@@ -162,16 +175,33 @@ function runSingle(config: MonteCarloConfig, state: InternalState, rootRngSeed: 
   const rng = createRng(rootRngSeed).fork(run + 1);
   let simState = { ...config.baseState };
 
+  let stressBreakInRun = false;
+  let drawdownInRun = false;
+  let blackSwanInRun = false;
+
   for (let stepIndex = 0; stepIndex < steps; stepIndex += 1) {
     if (!state.scoreRunsByStep[stepIndex]) state.scoreRunsByStep[stepIndex] = [];
     const action = config.actionPolicy(simState, stepIndex);
     const outcome = step(simState, action, config.dtDays, config.scenarioParams, rng);
     simState = outcome.state;
     state.scoreRunsByStep[stepIndex].push(scoreState(simState));
-    if (outcome.riskFlags.stressBreak) state.stressBreaks += 1;
-    if (outcome.riskFlags.drawdownOver20) state.drawdowns += 1;
-    if (outcome.riskFlags.blackSwan) state.blackSwans += 1;
+    if (outcome.riskFlags.stressBreak) {
+      state.stressBreakEvents += 1;
+      stressBreakInRun = true;
+    }
+    if (outcome.riskFlags.drawdownOver20) {
+      state.drawdownEvents += 1;
+      drawdownInRun = true;
+    }
+    if (outcome.riskFlags.blackSwan) {
+      state.blackSwanEvents += 1;
+      blackSwanInRun = true;
+    }
   }
+
+  if (stressBreakInRun) state.stressBreakWorlds += 1;
+  if (drawdownInRun) state.drawdownWorlds += 1;
+  if (blackSwanInRun) state.blackSwanWorlds += 1;
 
   const endingScore = scoreState(simState);
   state.endingCapitalValues.push(simState.capital);
@@ -190,9 +220,12 @@ function finalize(config: MonteCarloConfig, completedRuns: number, state: Intern
     state.endingResilienceValues,
     state.endingScoreValues,
     state.successfulRuns,
-    state.stressBreaks,
-    state.drawdowns,
-    state.blackSwans,
+    state.stressBreakWorlds,
+    state.stressBreakEvents,
+    state.drawdownWorlds,
+    state.drawdownEvents,
+    state.blackSwanWorlds,
+    state.blackSwanEvents,
     topLevers,
     state.scoreRunsByStep,
     config.dtDays
