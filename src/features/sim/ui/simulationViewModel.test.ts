@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildHeadroomChipModel, buildRiskDisplayMetric, buildSpreadChipModel, formatMonthTick, heroStatusLabel, nearestDiscreteLevel, rankLevers, riskCostLineKey, strategicLeverTitleKey, togglePin } from './simulationViewModel';
+import { buildDistributionBars, buildFanPoints, buildHeadroomChipModel, buildRiskDisplayMetric, buildSpreadChipModel, formatMonthTick, heroStatusLabel, nearestDiscreteLevel, rankLevers, riskCostLineKey, strategicLeverTitleKey, togglePin } from './simulationViewModel';
 
 describe('simulation view model helpers', () => {
   it('formats x-axis as months and never 1970 date labels', () => {
@@ -39,6 +39,15 @@ describe('simulation view model helpers', () => {
     expect(buildSpreadChipModel(95)).toEqual({ fan: 10, helpKey: 'simulationSpreadHelpWide' });
     expect(riskCostLineKey(1)).toBe('simulationRiskCostLineLow');
     expect(riskCostLineKey(3)).toBe('simulationRiskCostLineHigh');
+  });
+
+
+
+  it('builds fan quantiles and distribution bars', () => {
+    const fan = buildFanPoints([{ p10: 80, p50: 100, p90: 140 }]);
+    expect(fan[0]).toMatchObject({ month: 1, p25: 90, p75: 120 });
+    const bars = buildDistributionBars([10, 20, 30], [5, 10]);
+    expect(bars[1]).toMatchObject({ heightPct: 100, edgeLeft: 20, edgeRight: 30 });
   });
 
   it('ranks and labels strategic levers deterministically', () => {

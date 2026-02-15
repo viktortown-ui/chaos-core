@@ -679,3 +679,68 @@ button:disabled { opacity: 0.6; }
   .sim-dock-row { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .cosHudRow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.oracle-theater {
+  padding: 0.6rem 0;
+}
+
+.oracle-hud-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+}
+
+.oracle-hud-tile {
+  border: 1px solid rgba(109, 178, 255, 0.28);
+  border-radius: 14px;
+  background: linear-gradient(170deg, rgba(12, 27, 45, 0.96), rgba(8, 17, 30, 0.96));
+  padding: 0.7rem;
+  box-shadow: 0 0 18px rgba(76, 168, 255, 0.14);
+}
+
+.oracle-hud-icon { opacity: 0.86; }
+.oracle-hud-label { margin: 0.2rem 0; color: var(--cos-text-lo); font-size: 0.78rem; }
+.oracle-hud-tile strong { font-size: 1.45rem; line-height: 1.1; }
+.oracle-hud-quip { margin: 0.2rem 0 0; font-size: 0.72rem; color: #9ec7f7; }
+
+.oracle-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.oracle-strike-grid,
+.lever-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.55rem;
+}
+
+.oracle-strike-card,
+.oracle-lever-card {
+  border: 1px solid var(--cos-stroke-soft);
+  border-radius: 12px;
+  padding: 0.65rem;
+  background: rgba(10, 19, 34, 0.9);
+}
+
+.oracle-counter-list {
+  margin: 0.2rem 0;
+  padding-left: 1rem;
+}
+
+.sim-screen.reduce-motion .oracle-hud-tile,
+.sim-screen.reduce-motion .oracle-lever-card,
+.sim-screen.reduce-motion .oracle-strike-card {
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oracle-hud-tile,
+  .oracle-lever-card,
+  .oracle-strike-card {
+    transition: none !important;
+    animation: none !important;
+  }
+}

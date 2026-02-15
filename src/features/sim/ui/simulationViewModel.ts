@@ -1,6 +1,12 @@
 import { RiskEvents } from '../../../core/sim/types';
 import { SensitivityItem } from '../worker/protocol';
 
+interface PercentilePoint {
+  p10: number;
+  p50: number;
+  p90: number;
+}
+
 export const DISCRETE_LEVEL_VALUES = [0.2, 0.4, 0.6, 0.8, 1] as const;
 
 export function clampPercent(value: number): number {
@@ -142,4 +148,53 @@ export function buildRiskDisplayMetric(metric: RiskEvents[keyof RiskEvents], run
     avgPerWorld: totalEvents / safeRuns,
     totalEvents
   };
+}
+
+export interface FanPoint {
+  month: number;
+  p10: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+}
+
+export function buildFanPoints(trajectory: PercentilePoint[]): FanPoint[] {
+  return trajectory.map((point, index) => {
+    const lowerSpan = point.p50 - point.p10;
+    const upperSpan = point.p90 - point.p50;
+    return {
+      month: index + 1,
+      p10: point.p10,
+      p25: point.p10 + lowerSpan * 0.5,
+      p50: point.p50,
+      p75: point.p50 + upperSpan * 0.5,
+      p90: point.p90
+    };
+  });
+}
+
+export interface HudMetric {
+  labelKey: 'simulationHudSuccess' | 'simulationHudMedian' | 'simulationHudP10' | 'simulationHudDrawdown';
+  value: string;
+  subtextKey: 'simulationHudSuccessSub' | 'simulationHudMedianSub' | 'simulationHudP10Sub' | 'simulationHudDrawdownSub';
+  quipKey: 'simulationHudQuipProbability' | 'simulationHudQuipThreshold' | 'simulationHudQuipNoise' | 'simulationHudQuipRisk';
+  icon: string;
+}
+
+export interface DistributionBar {
+  index: number;
+  heightPct: number;
+  edgeLeft: number;
+  edgeRight: number;
+}
+
+export function buildDistributionBars(binEdges: number[], bins: number[]): DistributionBar[] {
+  const max = Math.max(...bins, 1);
+  return bins.map((bin, index) => ({
+    index,
+    heightPct: (bin / max) * 100,
+    edgeLeft: binEdges[index] ?? index,
+    edgeRight: binEdges[index + 1] ?? (binEdges[index] ?? index) + 1
+  }));
 }
