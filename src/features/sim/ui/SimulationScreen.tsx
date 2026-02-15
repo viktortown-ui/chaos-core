@@ -3,6 +3,7 @@ import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 import { SimulationResult, StrategyMode } from '../../../core/sim/types';
 import { useReducedMotion } from '../../../fx/useReducedMotion';
 import { t } from '../../../shared/i18n';
+import type { TranslationKey } from '../../../shared/i18n';
 import { loadBaseline, loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '../../../shared/storage/simStorage';
 import { UPlotChart, UPlotSeries } from '../../charts/UPlotChart';
 import { SensitivityItem, SimConfigPayload, SimWorkerResponse } from '../worker/protocol';
@@ -30,6 +31,19 @@ const presets: Preset[] = [
 ];
 
 const runsCount = 10_000;
+
+
+type StrikeLabelKey = Extract<TranslationKey, 'simulationBlackSwanWorldsHit' | 'simulationBlackSwanHitsPerWorld' | 'simulationDrawdowns'>;
+type CounterMeasureKey = Extract<
+  TranslationKey,
+  | 'simulationCounterMeasureAttack'
+  | 'simulationCounterMeasureDefense'
+  | 'simulationCounterMeasureBalance'
+  | 'simulationCounterMeasureSwanOn'
+  | 'simulationCounterMeasureSwanOff'
+  | 'simulationCounterMeasureRiskHigh'
+  | 'simulationCounterMeasureRiskLow'
+>;
 
 const presetIcons: Record<PresetKey, string> = {
   boost: '⚡',
@@ -341,10 +355,7 @@ export function SimulationScreen() {
     { labelKey: 'simulationHudDrawdown' as const, value: `${Math.round((result.riskEvents.drawdownsOver20.worldsWithEvent / Math.max(1, result.runs)) * 100)}%`, subtextKey: 'simulationHudDrawdownSub' as const, quipKey: 'simulationHudQuipRisk' as const, icon: '↧' }
   ] : [];
 
-  const strikeCards: Array<{
-    labelKey: 'simulationBlackSwanWorldsHit' | 'simulationBlackSwanHitsPerWorld' | 'simulationDrawdowns';
-    value: string;
-  }> = riskSummary ? [
+  const strikeCards: Array<{ labelKey: StrikeLabelKey; value: string }> = riskSummary ? [
     { labelKey: 'simulationBlackSwanWorldsHit', value: `${Math.round(riskSummary.blackSwans.shareOfWorldsPct)}%` },
     { labelKey: 'simulationBlackSwanHitsPerWorld', value: riskSummary.blackSwans.avgPerWorld.toFixed(1) },
     { labelKey: 'simulationDrawdowns', value: `${Math.round(riskSummary.drawdownsOver20.shareOfWorldsPct)}%` }
@@ -353,15 +364,7 @@ export function SimulationScreen() {
   const uncertaintyLevel = nearestDiscreteLevel(uncertainty);
   const riskLevel = nearestDiscreteLevel(riskAppetite);
 
-  const antiMeasures: Array<
-    | 'simulationCounterMeasureAttack'
-    | 'simulationCounterMeasureDefense'
-    | 'simulationCounterMeasureBalance'
-    | 'simulationCounterMeasureSwanOn'
-    | 'simulationCounterMeasureSwanOff'
-    | 'simulationCounterMeasureRiskHigh'
-    | 'simulationCounterMeasureRiskLow'
-  > = [
+  const antiMeasures: CounterMeasureKey[] = [
     strategy === 'attack' ? 'simulationCounterMeasureAttack' : strategy === 'defense' ? 'simulationCounterMeasureDefense' : 'simulationCounterMeasureBalance',
     blackSwanEnabled ? 'simulationCounterMeasureSwanOn' : 'simulationCounterMeasureSwanOff',
     riskLevel >= 3 ? 'simulationCounterMeasureRiskHigh' : 'simulationCounterMeasureRiskLow'
