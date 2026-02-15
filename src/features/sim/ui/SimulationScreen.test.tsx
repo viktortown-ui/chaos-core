@@ -81,16 +81,18 @@ describe('SimulationScreen', () => {
     vi.stubGlobal('Worker', WorkerMock);
   });
 
-  it('renders oracle stage KPI strip after run', async () => {
+  it('renders outcome, how-to-read and drivers after run', async () => {
     renderSimulation();
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
     await waitFor(() => {
       expect(screen.getByText('Oracle Stage')).toBeInTheDocument();
+      expect(screen.getByLabelText('Итог')).toBeInTheDocument();
+      expect(screen.getByText('Как читать график')).toBeInTheDocument();
+      expect(screen.getByText('Почему так вышло (Top-3 драйверов)')).toBeInTheDocument();
       expect(screen.getByText('Шанс успеха')).toBeInTheDocument();
       expect(screen.getByText('Типичный финал')).toBeInTheDocument();
-      expect(screen.getByText('Худшая просадка')).toBeInTheDocument();
-      expect(screen.getByText('Чёрный лебедь')).toBeInTheDocument();
+      expect(screen.getByText('Плохие 10% миров (P10)')).toBeInTheDocument();
     });
   });
 
@@ -109,6 +111,10 @@ describe('SimulationScreen', () => {
   });
 
   it('does not animate hero pulse in reduced-motion', async () => {
+    const rafSpy = vi.fn();
+    vi.stubGlobal('requestAnimationFrame', rafSpy);
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
     renderSimulation();
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
@@ -119,5 +125,6 @@ describe('SimulationScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: /Применить лучший рычаг/ }));
     expect(document.querySelector('.sim-screen')).toHaveClass('reduce-motion');
     expect(document.querySelector('.sim-hero')).not.toHaveClass('sim-hero-pulse');
+    expect(rafSpy).not.toHaveBeenCalled();
   });
 });

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 import { SimulationResult, StrategyMode } from '../../../core/sim/types';
 import { useReducedMotion } from '../../../fx/useReducedMotion';
-import { t } from '../../../shared/i18n';
+import { Language, t } from '../../../shared/i18n';
 import { loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '../../../shared/storage/simStorage';
 import { SensitivityItem, SimConfigPayload, SimWorkerResponse } from '../worker/protocol';
-import { buildFanPoints, buildHeadroomChipModel, buildOraclePins, buildRiskDisplayMetric, buildSpreadChipModel, DISCRETE_LEVEL_VALUES, FanPoint, formatSignedPercent, formatSignedTenthsAsPercent, heroStatusLabel, nearestDiscreteLevel, rankLevers, riskCostLineKey, riskEffectKey, strategicLeverTitleKey, successMeterLabel, uncertaintyEffectKey } from './simulationViewModel';
+import { buildDrivers, buildFanPoints, buildHeadroomChipModel, buildOraclePins, buildRiskDisplayMetric, buildSpreadChipModel, DISCRETE_LEVEL_VALUES, DriverInsight, FanPoint, findFailureWindow, formatAdaptive, formatSignedPercent, formatSignedTenthsAsPercent, heroStatusLabel, nearestDiscreteLevel, rankLevers, riskCostLineKey, riskEffectKey, strategicLeverTitleKey, successMeterLabel, uncertaintyEffectKey } from './simulationViewModel';
 
 type PresetKey = 'boost' | 'stabilize' | 'storm' | 'focus' | 'diversify';
 
@@ -265,6 +265,64 @@ function OracleCanvas({
   return <canvas ref={canvasRef} className="oracle-canvas" role="img" aria-label={ariaLabel} />;
 }
 
+
+function OutcomeSummary({
+  language,
+  successRatio,
+  runs,
+  threshold,
+  horizonMonths,
+  failureWindow,
+  scoreP50
+}: {
+  language: Language;
+  successRatio: number;
+  runs: number;
+  threshold: number;
+  horizonMonths: number;
+  failureWindow: { fromMonth: number; toMonth: number } | null;
+  scoreP50: number;
+}) {
+  const successWorlds = Math.round(successRatio * runs);
+  const pct = Math.round(successRatio * 100);
+  const verdictKey = scoreP50 >= threshold ? 'simulationOutcomeVerdictPass' : 'simulationOutcomeVerdictFail';
+  return (
+    <section className="oracle-outcome stack" aria-label={t('simulationOutcomeTitle', language)}>
+      <strong>{t('simulationOutcomeTitle', language)}: {t(verdictKey, language)}</strong>
+      <p>{t('simulationOutcomeSuccessRule', language)}: {t('simulationOutcomeMetricName', language)} ≥ {formatAdaptive(threshold)} · {horizonMonths} {t('simulationMonthsShort', language)}</p>
+      <p>{t('simulationOutcomeFrequency', language)}: {successWorlds} {t('simulationOutcomeOutOf', language)} {runs} {t('simulationWorldsSuffix', language)} (= {pct}%)</p>
+      <p>{t('simulationOutcomeBreakpoint', language)}: {failureWindow ? `${failureWindow.fromMonth}–${failureWindow.toMonth} ${t('simulationMonthsShort', language)}` : t('simulationOutcomeBreakpointNone', language)}</p>
+    </section>
+  );
+}
+
+function OracleHowToRead({ language }: { language: Language }) {
+  return (
+    <details className="oracle-howto">
+      <summary>{t('simulationHowToReadTitle', language)}</summary>
+      <ul>
+        <li>{t('simulationHowToReadBand', language)}</li>
+        <li>{t('simulationHowToReadLines', language)}</li>
+        <li>{t('simulationHowToReadThreshold', language)}</li>
+      </ul>
+    </details>
+  );
+}
+
+function DriversList({ language, drivers }: { language: Language; drivers: DriverInsight[] }) {
+  return (
+    <section className="oracle-drivers stack" aria-label={t('simulationDriversTitle', language)}>
+      <strong>{t('simulationDriversTitle', language)}</strong>
+      {drivers.map((driver) => (
+        <article key={driver.key} className="oracle-driver-item">
+          <p><b>{t(driver.titleKey, language)}</b> — {t(driver.summaryKey, language)}</p>
+          <small>{t('simulationDriversStrength', language)}: {t(driver.strengthKey, language)} · {driver.indicator}</small>
+        </article>
+      ))}
+    </section>
+  );
+}
+
 export function SimulationScreen() {
   const { data, setData } = useChaosCore();
   const language = data.settings.language;
@@ -438,26 +496,25 @@ export function SimulationScreen() {
 
   const oraclePins = useMemo(() => buildOraclePins(fanPoints.length, null), [fanPoints.length]);
 
+  const successWorlds = result ? Math.round(result.successRatio * result.runs) : 0;
+  const failureWindow = useMemo(() => findFailureWindow(fanPoints, successThreshold), [fanPoints, successThreshold]);
+  const drivers = useMemo(() => buildDrivers(topStrategicLevers), [topStrategicLevers]);
+
   const kpiMetrics = result && riskSummary ? [
     {
       labelKey: 'simulationOracleKpiSuccess',
-      value: `${Math.round(result.successRatio * 100)}%`,
+      value: `${successWorlds}/${result.runs} (${Math.round(result.successRatio * 100)}%)`,
       hintKey: 'simulationOracleKpiSuccessHint'
     },
     {
       labelKey: 'simulationOracleKpiTypical',
-      value: `${Math.round(result.scorePercentiles.p50)}`,
+      value: `${formatAdaptive(result.scorePercentiles.p50)} ${t('simulationOracleUnitsCorePoints', language)}`,
       hintKey: 'simulationOracleKpiTypicalHint'
     },
     {
       labelKey: 'simulationOracleKpiDrawdown',
-      value: `${Math.round(riskSummary.drawdownsOver20.shareOfWorldsPct)}%`,
+      value: `${formatAdaptive(result.scorePercentiles.p10)} ${t('simulationOracleUnitsCorePoints', language)}`,
       hintKey: 'simulationOracleKpiDrawdownHint'
-    },
-    {
-      labelKey: 'simulationOracleKpiSwan',
-      value: `${Math.round(riskSummary.blackSwans.shareOfWorldsPct)}% · ${riskSummary.blackSwans.avgPerWorld.toFixed(1)}`,
-      hintKey: 'simulationOracleKpiSwanHint'
     }
   ] : [];
   const uncertaintyLevel = nearestDiscreteLevel(uncertainty);
@@ -618,6 +675,15 @@ export function SimulationScreen() {
               <strong>{t('simulationOracleStageTitle', language)}</strong>
               <span className="cosChip">{t('simulationOracleStageSub', language)}</span>
             </div>
+            <OutcomeSummary
+              language={language}
+              successRatio={result.successRatio}
+              runs={result.runs}
+              threshold={successThreshold}
+              horizonMonths={horizonMonths}
+              failureWindow={failureWindow}
+              scoreP50={result.scorePercentiles.p50}
+            />
             <OracleCanvas
               fanPoints={fanPoints}
               threshold={successThreshold}
@@ -626,6 +692,7 @@ export function SimulationScreen() {
               ariaLabel={t('simulationTrajectoryTitle', language)}
               pinLabel={t('simulationTooltipMonth', language)}
             />
+            <OracleHowToRead language={language} />
             <div className="oracle-kpi-strip">
               {kpiMetrics.map((metric) => (
                 <article key={metric.labelKey} className="oracle-kpi-chip">
@@ -635,24 +702,30 @@ export function SimulationScreen() {
                 </article>
               ))}
             </div>
+            <DriversList language={language} drivers={drivers} />
 
             <div className="lever-cards-grid oracle-command-grid">
-              {topStrategicLevers.map((lever, index) => (
+              {topStrategicLevers.map((lever, index) => {
+                const nextSuccessWorlds = Math.max(0, Math.min(result.runs, successWorlds + Math.round((lever.successDelta / 100) * result.runs)));
+                const nextSuccessPct = Math.max(0, Math.min(100, Math.round(result.successRatio * 100 + lever.successDelta)));
+                return (
                 <article key={`${lever.labelKey}-${lever.score}`} className="oracle-lever-card">
                   <strong>{t(strategicLeverTitleKey(index), language)}</strong>
                   <p className="oracle-command-line">{t('simulationOracleDo', language)}: {t(lever.labelKey as never, language)}</p>
                   <p className="oracle-command-impact">{t('simulationOracleEffect', language)}: {t('simulationLeverSuccessDelta', language)} {formatSignedTenthsAsPercent(lever.successDelta)} · {t('simulationLeverDrawdownDelta', language)} {formatSignedPercent(lever.drawdownDelta)}</p>
+                  <p className="oracle-command-impact">{t('simulationExpectedEffect', language)}: {t('simulationExpectedEffectChance', language)} {Math.round(result.successRatio * 100)}% → {nextSuccessPct}% · {t('simulationExpectedEffectWorlds', language)} {successWorlds} → {nextSuccessWorlds}</p>
                   <button className="cosBtn cosBtn--ghost" onClick={applyBestLever}>{t('simulationApplyLever', language)}</button>
                 </article>
-              ))}
+              );})}
             </div>
           </section>
 
           <details className="stack sim-details">
             <summary>{t('simulationAdvanced', language)}</summary>
-            <p><code>{t('simulationRawMedian', language)}: {Math.round(result.scorePercentiles.p50)}</code></p>
-            <p><code>{t('simulationRawP10', language)}: {Math.round(result.scorePercentiles.p10)}</code></p>
-            <p><code>{t('simulationRawP90', language)}: {Math.round(result.scorePercentiles.p90)}</code></p>
+            <p>{t('simulationAdvancedPercentilesHelp', language)}</p>
+            <p><code>{t('simulationRawMedian', language)}: {Math.round(result.scorePercentiles.p50)} {t('simulationOracleUnitsCorePoints', language)}</code></p>
+            <p><code>{t('simulationRawP10', language)}: {Math.round(result.scorePercentiles.p10)} {t('simulationOracleUnitsCorePoints', language)}</code></p>
+            <p><code>{t('simulationRawP90', language)}: {Math.round(result.scorePercentiles.p90)} {t('simulationOracleUnitsCorePoints', language)}</code></p>
             <p><code>{t('simulationRawUncertainty', language)}: {uncertainty.toFixed(2)}</code></p>
             <p><code>{t('simulationRawRiskAppetite', language)}: {riskAppetite.toFixed(2)}</code></p>
           </details>

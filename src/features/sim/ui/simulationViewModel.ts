@@ -7,6 +7,14 @@ interface PercentilePoint {
   p90: number;
 }
 
+export interface DriverInsight {
+  key: string;
+  titleKey: 'simulationDriverThreshold' | 'simulationDriverUncertainty' | 'simulationDriverRisk';
+  summaryKey: 'simulationDriverThresholdSummary' | 'simulationDriverUncertaintySummary' | 'simulationDriverRiskSummary';
+  strengthKey: 'simulationDriverStrengthStrong' | 'simulationDriverStrengthMedium' | 'simulationDriverStrengthWeak';
+  indicator: string;
+}
+
 export const DISCRETE_LEVEL_VALUES = [0.2, 0.4, 0.6, 0.8, 1] as const;
 
 export function clampPercent(value: number): number {
@@ -129,6 +137,60 @@ export function formatSignedPercent(value: number): string {
 export function formatSignedTenthsAsPercent(value: number): string {
   const asPercent = Math.round(value * 10);
   return `${asPercent >= 0 ? '+' : ''}${asPercent}%`;
+}
+
+export function formatAdaptive(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 100) return `${Math.round(value)}`;
+  const rounded = Math.round(value * 10) / 10;
+  if (Math.abs(rounded - Math.round(rounded)) < 0.05) return `${Math.round(rounded)}`;
+  return rounded.toFixed(1);
+}
+
+export function findFailureWindow(points: FanPoint[], threshold: number): { fromMonth: number; toMonth: number } | null {
+  const failing = points.filter((point) => point.p50 < threshold).map((point) => point.month);
+  if (failing.length === 0) return null;
+  return {
+    fromMonth: failing[0],
+    toMonth: failing[failing.length - 1]
+  };
+}
+
+function toStrength(score: number): DriverInsight['strengthKey'] {
+  if (score >= 3) return 'simulationDriverStrengthStrong';
+  if (score >= 2) return 'simulationDriverStrengthMedium';
+  return 'simulationDriverStrengthWeak';
+}
+
+export function buildDrivers(levers: SensitivityItem[]): DriverInsight[] {
+  return levers.slice(0, 3).map((lever, index) => {
+    const key = `${lever.lever}-${index}`;
+    if (lever.lever === 'uncertainty') {
+      return {
+        key,
+        titleKey: 'simulationDriverUncertainty',
+        summaryKey: 'simulationDriverUncertaintySummary',
+        strengthKey: toStrength(lever.score),
+        indicator: `${formatSignedTenthsAsPercent(lever.successDelta)} / ${formatSignedPercent(lever.drawdownDelta)}`
+      };
+    }
+    if (lever.lever === 'riskAppetite') {
+      return {
+        key,
+        titleKey: 'simulationDriverRisk',
+        summaryKey: 'simulationDriverRiskSummary',
+        strengthKey: toStrength(lever.score),
+        indicator: `${formatSignedTenthsAsPercent(lever.successDelta)} / ${formatSignedPercent(lever.drawdownDelta)}`
+      };
+    }
+    return {
+      key,
+      titleKey: 'simulationDriverThreshold',
+      summaryKey: 'simulationDriverThresholdSummary',
+      strengthKey: toStrength(lever.score),
+      indicator: `${formatSignedTenthsAsPercent(lever.successDelta)} / ${formatSignedPercent(lever.drawdownDelta)}`
+    };
+  });
 }
 
 export function buildOraclePins(length: number, pinnedIndex: number | null): number[] {
