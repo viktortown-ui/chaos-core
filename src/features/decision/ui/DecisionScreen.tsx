@@ -1,40 +1,69 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 import { t } from '../../../shared/i18n';
-import { DecisionBranchPayload, DecisionBranchResultPayload, DecisionWorkerResponse } from '../worker/protocol';
+import { useReducedMotion } from '../../../fx/useReducedMotion';
+import {
+  DecisionBranchPayload,
+  DecisionBranchResultPayload,
+  DecisionWorkerResponse
+} from '../worker/protocol';
 
-const branchTemplates: DecisionBranchPayload[] = [
+type BranchKey = 'A' | 'B' | 'C';
+
+interface BranchTemplate extends Omit<DecisionBranchPayload, 'reasons' | 'nextActions'> {
+  branchKey: BranchKey;
+  strategyLabelKey: 'decisionAttack' | 'decisionBalance' | 'decisionDefense';
+  reasonKeys: [
+    'decisionReasonAttackUpside' | 'decisionReasonBalanceBuffer' | 'decisionReasonDefenseDownside',
+    'decisionReasonAttackSensitivity' | 'decisionReasonBalanceCompromise' | 'decisionReasonDefenseProtection'
+  ];
+  actionKeys: [
+    'decisionActionAttackLiquidity' | 'decisionActionBalanceMilestones' | 'decisionActionDefenseReserve',
+    'decisionActionAttackStopLoss' | 'decisionActionBalanceRiskCap' | 'decisionActionDefensePace',
+    'decisionActionAttackSignals' | 'decisionActionBalanceTeamLoad' | 'decisionActionDefenseResilience'
+  ];
+}
+
+const branchTemplates: BranchTemplate[] = [
   {
     id: 'A',
+    branchKey: 'A',
     label: 'A',
     strategy: 'attack',
+    strategyLabelKey: 'decisionAttack',
     riskAppetite: 0.82,
     uncertainty: 0.62,
     blackSwanEnabled: false,
-    reasons: ['Растущий апсайд при ускорении', 'Высокая чувствительность к неопределённости'],
-    nextActions: ['Проверить ликвидность на 3 месяца', 'Поставить порог стоп-лосса', 'Собрать ранние сигналы']
+    reasonKeys: ['decisionReasonAttackUpside', 'decisionReasonAttackSensitivity'],
+    actionKeys: ['decisionActionAttackLiquidity', 'decisionActionAttackStopLoss', 'decisionActionAttackSignals']
   },
   {
     id: 'B',
+    branchKey: 'B',
     label: 'B',
     strategy: 'balance',
+    strategyLabelKey: 'decisionBalance',
     riskAppetite: 0.55,
     uncertainty: 0.45,
     blackSwanEnabled: true,
-    reasons: ['Умеренный рост с буфером устойчивости', 'Компромисс между темпом и риском'],
-    nextActions: ['Закрепить контрольные точки по месяцу', 'Ограничить риск в новых шагах', 'Проверить командную нагрузку']
+    reasonKeys: ['decisionReasonBalanceBuffer', 'decisionReasonBalanceCompromise'],
+    actionKeys: ['decisionActionBalanceMilestones', 'decisionActionBalanceRiskCap', 'decisionActionBalanceTeamLoad']
   },
   {
     id: 'C',
+    branchKey: 'C',
     label: 'C',
     strategy: 'defense',
+    strategyLabelKey: 'decisionDefense',
     riskAppetite: 0.35,
     uncertainty: 0.3,
     blackSwanEnabled: true,
-    reasons: ['Ниже downside при стрессах', 'Сильнее защитные факторы'],
-    nextActions: ['Сохранить резерв капитала', 'Пересмотреть темп роста', 'Укрепить отказоустойчивость']
+    reasonKeys: ['decisionReasonDefenseDownside', 'decisionReasonDefenseProtection'],
+    actionKeys: ['decisionActionDefenseReserve', 'decisionActionDefensePace', 'decisionActionDefenseResilience']
   }
 ];
+
+const DEBOUNCE_MS = 260;
 
 function riskFlag(risk: number, language: 'ru' | 'en') {
   if (risk >= 0.55) return t('decisionRiskHigh', language);
@@ -42,15 +71,22 @@ function riskFlag(risk: number, language: 'ru' | 'en') {
   return t('decisionRiskLow', language);
 }
 
+function toOutOfTen(risk: number) {
+  return Math.min(10, Math.max(0, Math.round(risk * 10)));
+}
+
 export function DecisionScreen() {
   const { data } = useChaosCore();
   const language = data.settings.language;
   const [isRunning, setRunning] = useState(false);
+  const reducedMotion = useReducedMotion(data.settings.reduceMotionOverride);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [branches, setBranches] = useState<DecisionBranchResultPayload[]>([]);
+  const [branchConfig, setBranchConfig] = useState(branchTemplates);
 
   const workerRef = useRef<Worker | null>(null);
   const activeIdRef = useRef<string | null>(null);
+  const debounceRef = useRef<number | null>(null);
 
   useEffect(() => {
     const worker = new Worker(new URL('../worker/decision.worker.ts', import.meta.url), { type: 'module' });
@@ -73,13 +109,27 @@ export function DecisionScreen() {
     };
   }, []);
 
-  const runDecision = () => {
+  const cancelActive = () => {
+    const worker = workerRef.current;
+    const activeId = activeIdRef.current;
+    if (!worker || !activeId) return;
+    worker.postMessage({ type: 'cancel', id: activeId });
+  };
+
+  const runDecision = (config: BranchTemplate[]) => {
     const worker = workerRef.current;
     if (!worker) return;
 
+    cancelActive();
     const requestId = `decision-${Date.now()}`;
     activeIdRef.current = requestId;
     setRunning(true);
+
+    const branchesPayload: DecisionBranchPayload[] = config.map((branch) => ({
+      ...branch,
+      reasons: branch.reasonKeys.map((key) => t(key, language)),
+      nextActions: branch.actionKeys.map((key) => t(key, language))
+    }));
 
     worker.postMessage({
       type: 'start',
@@ -95,41 +145,98 @@ export function DecisionScreen() {
           momentum: (data.stats.strength + data.stats.intelligence) * 1.2,
           stress: Math.max(6, 32 - data.stats.wisdom)
         },
-        branches: branchTemplates
+        branches: branchesPayload
       }
     });
   };
 
-  const sortedBranches = useMemo(() => {
-    return [...branches].sort((a, b) => Number(b.dominant) - Number(a.dominant));
-  }, [branches]);
+  useEffect(() => {
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => runDecision(branchConfig), DEBOUNCE_MS);
+
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      cancelActive();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchConfig, data.stats, data.xp, language]);
+
+  const updateBranch = (branchKey: BranchKey, patch: Partial<BranchTemplate>) => {
+    setBranchConfig((current) => current.map((branch) => (branch.branchKey === branchKey ? { ...branch, ...patch } : branch)));
+  };
+
+  const sortedBranches = useMemo(() => [...branches].sort((a, b) => Number(b.dominant) - Number(a.dominant)), [branches]);
 
   return (
-    <section className="stack">
+    <section className={`stack decision-screen${reducedMotion ? ' reduce-motion' : ''}`}>
       <h2>{t('decisionTitle', language)}</h2>
       <p>{t('decisionSubtitle', language)}</p>
-      <button onClick={runDecision} disabled={isRunning}>{isRunning ? t('decisionRunning', language) : t('decisionRun', language)}</button>
+      <p>{t('decisionRecomputeDebounced', language)}: {DEBOUNCE_MS}ms</p>
+      <button onClick={() => runDecision(branchConfig)} disabled={isRunning}>{isRunning ? t('decisionRunning', language) : t('decisionRun', language)}</button>
 
-      <div className="grid-2 decision-grid">
-        {sortedBranches.map((branch) => (
-          <article key={branch.id} className="card stack">
-            <strong>{t('decisionBranch', language)} {branch.label} {branch.dominant ? `• ${t('decisionDominant', language)}` : ''}</strong>
-            <p>{t('decisionOutcomeRange', language)}: {branch.percentiles.p10.toFixed(1)} / {branch.percentiles.p50.toFixed(1)} / {branch.percentiles.p90.toFixed(1)}</p>
-            <p>{t('decisionRiskFlag', language)}: {riskFlag(branch.collapseRisk, language)}</p>
-            <div>
-              <strong>{t('decisionWhy', language)}</strong>
-              <ul>
-                {branch.reasons.slice(0, 2).map((reason) => <li key={reason}>{reason}</li>)}
-              </ul>
-            </div>
-            <div>
-              <strong>{t('decisionNextActions', language)}</strong>
-              <ol>
-                {branch.nextActions.slice(0, 3).map((action) => <li key={action}>{action}</li>)}
-              </ol>
-            </div>
-          </article>
-        ))}
+      <div className="decision-grid stack">
+        {branchConfig.map((branch) => {
+          const branchResult = sortedBranches.find((item) => item.id === branch.id);
+          return (
+            <article key={branch.id} className="card stack">
+              <strong>
+                {t('decisionBranch', language)} {branch.label} — {t(branch.strategyLabelKey, language)} {branchResult?.dominant ? `• ${t('decisionDominant', language)}` : ''}
+              </strong>
+
+              <label className="stack">
+                <span>{t('decisionRiskAppetite', language)}: {branch.riskAppetite.toFixed(2)}</span>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={0.95}
+                  step={0.01}
+                  value={branch.riskAppetite}
+                  onChange={(event) => updateBranch(branch.branchKey, { riskAppetite: Number(event.target.value) })}
+                />
+              </label>
+
+              <label className="stack">
+                <span>{t('decisionUncertainty', language)}: {branch.uncertainty.toFixed(2)}</span>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={0.95}
+                  step={0.01}
+                  value={branch.uncertainty}
+                  onChange={(event) => updateBranch(branch.branchKey, { uncertainty: Number(event.target.value) })}
+                />
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={branch.blackSwanEnabled}
+                  onChange={(event) => updateBranch(branch.branchKey, { blackSwanEnabled: event.target.checked })}
+                />{' '}
+                {t('decisionBlackSwan', language)}
+              </label>
+
+              {branchResult && (
+                <>
+                  <p>{t('decisionOutcomeRange', language)}: {branchResult.percentiles.p10.toFixed(1)} / {branchResult.percentiles.p50.toFixed(1)} / {branchResult.percentiles.p90.toFixed(1)}</p>
+                  <p>{t('decisionRiskOutOfTen', language)}: {toOutOfTen(branchResult.collapseRisk)} / 10 • {riskFlag(branchResult.collapseRisk, language)}</p>
+                  <div>
+                    <strong>{t('decisionWhy', language)}</strong>
+                    <ul>
+                      {branchResult.reasons.slice(0, 2).map((reason) => <li key={reason}>{reason}</li>)}
+                    </ul>
+                  </div>
+                  <div>
+                    <strong>{t('decisionNextActions', language)}</strong>
+                    <ol>
+                      {branchResult.nextActions.slice(0, 3).map((action) => <li key={action}>{action}</li>)}
+                    </ol>
+                  </div>
+                </>
+              )}
+            </article>
+          );
+        })}
       </div>
 
       {branches.length > 0 && (
