@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
-import { scoreState } from '../../../core/sim/model';
 import { SimulationResult, StrategyMode } from '../../../core/sim/types';
 import { useReducedMotion } from '../../../fx/useReducedMotion';
 import { t } from '../../../shared/i18n';
 import { loadBaseline, loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '../../../shared/storage/simStorage';
 import { UPlotChart, UPlotSeries } from '../../charts/UPlotChart';
 import { SensitivityItem, SimConfigPayload, SimWorkerResponse } from '../worker/protocol';
-import { buildRiskDisplayMetric, DISCRETE_LEVEL_VALUES, formatMonthTick, mapRawToHumanIndex, nearestDiscreteLevel, togglePin } from './simulationViewModel';
+import { buildRiskDisplayMetric, DISCRETE_LEVEL_VALUES, formatMonthTick, nearestDiscreteLevel, riskEffectKey, successMeterLabel, togglePin, uncertaintyEffectKey } from './simulationViewModel';
 
 type PresetKey = 'boost' | 'stabilize' | 'storm' | 'focus' | 'diversify';
 
@@ -36,6 +35,11 @@ function outOfTen(value: number): number {
   return Math.round(value * 10);
 }
 
+function pulseAndVibrate(trigger: () => void, reducedMotion: boolean) {
+  if (!reducedMotion) trigger();
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10);
+}
+
 export function SimulationScreen() {
   const { data, setData } = useChaosCore();
   const language = data.settings.language;
@@ -56,6 +60,7 @@ export function SimulationScreen() {
   const [isRunning, setRunning] = useState(false);
   const [scrubIndex, setScrubIndex] = useState<number | null>(null);
   const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
+  const [heroPulse, setHeroPulse] = useState(false);
 
   const workerRef = useRef<Worker | null>(null);
   const activeIdRef = useRef<string | null>(null);
@@ -64,6 +69,12 @@ export function SimulationScreen() {
   const configFingerprint = `${horizonMonths}|${uncertainty}|${riskAppetite}|${strategy}|${blackSwanEnabled}|${successThreshold}`;
 
   useEffect(() => setTemplates(loadSimTemplates()), []);
+
+  useEffect(() => {
+    if (!heroPulse) return;
+    const timeout = setTimeout(() => setHeroPulse(false), 220);
+    return () => clearTimeout(timeout);
+  }, [heroPulse]);
 
   useEffect(() => {
     const worker = new Worker(new URL('../worker/sim.worker.ts', import.meta.url), { type: 'module' });
@@ -167,6 +178,17 @@ export function SimulationScreen() {
     if (typeof cfg.successThreshold === 'number') setSuccessThreshold(cfg.successThreshold);
   };
 
+  const applyBestLever = () => {
+    const best = sensitivity[0];
+    if (!best) return;
+    const cfg = best.nextConfig;
+    if (typeof cfg.horizonMonths === 'number') setHorizonMonths(cfg.horizonMonths);
+    if (typeof cfg.riskAppetite === 'number') setRiskAppetite(cfg.riskAppetite);
+    if (typeof cfg.successThreshold === 'number') setSuccessThreshold(cfg.successThreshold);
+    if (cfg.strategy) setStrategy(cfg.strategy);
+    pulseAndVibrate(() => setHeroPulse(true), reducedMotion);
+  };
+
   const fanData = useMemo(() => {
     const trajectory = result?.scoreTrajectory ?? [];
     const x = trajectory.map((_, index) => index + 1);
@@ -193,8 +215,7 @@ export function SimulationScreen() {
     if (!result || effectiveIndex == null) return null;
     const point = result.scoreTrajectory[effectiveIndex];
     if (!point) return null;
-    const month = effectiveIndex + 1;
-    return { point, month };
+    return { point, month: effectiveIndex + 1 };
   }, [effectiveIndex, result]);
 
   const histogram = useMemo(() => {
@@ -204,12 +225,6 @@ export function SimulationScreen() {
   }, [result]);
 
   const selectedTradeoff = presets.find((preset) => preset.key === selectedPreset)?.tradeoffKey ?? 'tradeoffStabilize';
-  const baseScore = useMemo(() => scoreState({
-    capital: Math.max(40, data.xp * 0.6),
-    resilience: (data.stats.wisdom + data.stats.dexterity) * 2,
-    momentum: (data.stats.strength + data.stats.intelligence) * 1.4,
-    stress: Math.max(5, 30 - data.stats.wisdom)
-  }), [data.stats.dexterity, data.stats.intelligence, data.stats.strength, data.stats.wisdom, data.xp]);
 
   const riskSummary = useMemo(() => {
     if (!result) return null;
@@ -220,11 +235,10 @@ export function SimulationScreen() {
     };
   }, [result]);
 
-  const humanIndex = result ? mapRawToHumanIndex(result.scorePercentiles.p50, result.scorePercentiles.p10, result.scorePercentiles.p90) : null;
   const successMeter = result ? outOfTen(result.successRatio) : 0;
-  const vulnerability = riskSummary
-    ? (riskSummary.drawdownsOver20.shareOfWorldsPct >= riskSummary.stressBreaks.shareOfWorldsPct ? t('simulationDrawdowns', language) : t('simulationStressBreaks', language))
-    : '';
+  const meterLabelKey = successMeterLabel(successMeter);
+  const thresholdHeadroom = result ? Math.round(result.scorePercentiles.p50 - successThreshold) : null;
+  const spread = result ? Math.round(result.scorePercentiles.p90 - result.scorePercentiles.p10) : null;
 
   const uncertaintyLevel = nearestDiscreteLevel(uncertainty);
   const riskLevel = nearestDiscreteLevel(riskAppetite);
@@ -237,10 +251,19 @@ export function SimulationScreen() {
     }));
   };
 
+  const gaugeLength = 2 * Math.PI * 44;
+  const gaugeProgress = (Math.max(0, Math.min(10, successMeter)) / 10) * gaugeLength;
+
   return (
     <section className={`stack sim-screen${reducedMotion ? ' reduce-motion' : ''}`}>
       <h2>{t('simulationTitle', language)}</h2>
-      <p>{t('simulationMeaningLine', language)}</p>
+      <div className="sim-inline-intro">
+        <p>{t('simulationMeaningLine', language)}</p>
+        <details>
+          <summary aria-label={t('simulationWhatIsThis', language)}>ⓘ</summary>
+          <p>{t('simulationWhatIsThisBody', language)}</p>
+        </details>
+      </div>
 
       <div className="card stack">
         <div className="preset-row sim-preset-row">
@@ -251,6 +274,32 @@ export function SimulationScreen() {
         <p><strong>{t('simulationTradeoff', language)}:</strong> {t(selectedTradeoff, language)}</p>
       </div>
 
+      <div className={`card stack sim-hero${heroPulse ? ' sim-hero-pulse' : ''}`}>
+        <strong>{t('simulationHeroTitle', language)}</strong>
+        {!result && <p>{t('simulationHeroEmpty', language)}</p>}
+        {result && (
+          <>
+            <div className="sim-gauge-row">
+              <svg viewBox="0 0 120 120" className="sim-gauge" role="img" aria-label={t('simulationChanceOutOfTen', language)}>
+                <circle cx="60" cy="60" r="44" className="sim-gauge-bg" />
+                <circle cx="60" cy="60" r="44" className="sim-gauge-value" style={{ strokeDasharray: `${gaugeProgress} ${gaugeLength}` }} />
+                <text x="60" y="58" textAnchor="middle" className="sim-gauge-number">{successMeter}</text>
+                <text x="60" y="76" textAnchor="middle" className="sim-gauge-total">/10</text>
+              </svg>
+              <div>
+                <strong>{t(meterLabelKey, language)}</strong>
+                <p>{t('simulationThresholdHeadroom', language)}: <strong>{thresholdHeadroom}</strong></p>
+                <p>{t('simulationSpread', language)}: <strong>{spread}</strong></p>
+              </div>
+            </div>
+          </>
+        )}
+        <div className="preset-row sim-primary-actions">
+          <button onClick={applyBestLever} disabled={!sensitivity[0]}>{t('simulationApplyBestLever', language)}</button>
+          <button onClick={makeQuest}>{t('simulationMakeQuest', language)}</button>
+        </div>
+      </div>
+
       <div className="card stack">
         <label>{t('simulationHorizon', language)}: {horizonMonths}
           <input type="range" min={6} max={30} value={horizonMonths} onChange={(e) => setHorizonMonths(Number(e.target.value))} />
@@ -259,14 +308,17 @@ export function SimulationScreen() {
           <input type="range" min={80} max={180} step={1} value={successThreshold} onChange={(e) => setSuccessThreshold(Number(e.target.value))} />
         </label>
         <small>{t('simulationThresholdHelp', language)}</small>
-        <label>{t('simulationUncertainty', language)}: {t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}
+
+        <label>{t('simulationUncertainty', language)}: {t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)} <span title={t('simulationUncertaintyTooltip', language)} className="sim-help-dot">?</span>
           <input type="range" min={0} max={4} step={1} value={uncertaintyLevel} onChange={(e) => setUncertainty(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
         </label>
-        <small>{t('simulationUncertaintyHint', language)}</small>
-        <label>{t('simulationRiskAppetite', language)}: {t(`simulationRiskLevel${riskLevel + 1}` as never, language)}
+        <small>{t('simulationFutureFan', language)}: {t(uncertaintyEffectKey(uncertaintyLevel), language)}</small>
+
+        <label>{t('simulationRiskAppetite', language)}: {t(`simulationRiskLevel${riskLevel + 1}` as never, language)} <span title={t('simulationRiskTooltip', language)} className="sim-help-dot">?</span>
           <input type="range" min={0} max={4} step={1} value={riskLevel} onChange={(e) => setRiskAppetite(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
         </label>
-        <small>{t('simulationRiskHint', language)}</small>
+        <small>{t('simulationRiskPrice', language)}: {t(riskEffectKey(riskLevel), language)}</small>
+
         <label>{t('simulationStrategy', language)}
           <select value={strategy} onChange={(e) => setStrategy(e.target.value as StrategyMode)}>
             <option value="attack">{t('strategyAttack', language)}</option>
@@ -289,15 +341,6 @@ export function SimulationScreen() {
 
       {result && (
         <>
-          <div className="card stack sim-hud">
-            <strong>{t('simulationSignalHud', language)}</strong>
-            <p className="sim-meter">{successMeter}/10</p>
-            <p>{successThreshold > baseScore + 35 ? t('simulationVerdictHighThreshold', language) : t('simulationVerdictOk', language)}</p>
-            <p><strong>{t('simulationMainVulnerability', language)}:</strong> {vulnerability}</p>
-            <p><strong>{t('simulationNextActionLine', language)}:</strong> {sensitivity[0] ? t(sensitivity[0].labelKey as never, language) : t('simulationNextOne', language)}</p>
-            {humanIndex != null && <p><strong>{t('simulationHumanIndex', language)}:</strong> {humanIndex}/100</p>}
-          </div>
-
           <div className="card stack">
             <strong>{t('simulationTrajectoryTitle', language)}</strong>
             <UPlotChart
@@ -306,20 +349,33 @@ export function SimulationScreen() {
               kind="time-series"
               reducedMotion={reducedMotion}
               ariaLabel={t('simulationTrajectoryTitle', language)}
+              showLegend={false}
               onScrubIndex={setScrubIndex}
-              onTogglePin={(idx) => setPinnedIndex((current) => togglePin(current, idx))}
+              onTogglePin={(idx) => {
+                setPinnedIndex((current) => {
+                  const next = togglePin(current, idx);
+                  pulseAndVibrate(() => setHeroPulse(true), reducedMotion);
+                  return next;
+                });
+              }}
               xAxisConfig={{ isTimeScale: false, values: (_u, values) => values.map((value) => formatMonthTick(value)) }}
             />
-            {pinnedIndex != null && <span className="sim-pinned-pill">{t('simulationPinned', language)}</span>}
+            {!tooltip && <p className="sim-legend-hint">{t('simulationChartHint', language)}</p>}
+            <div className="sim-legend-row">
+              <span><i className="chip bad" />{t('scenarioBad', language)}{tooltip ? `: ${Math.round(tooltip.point.p10)}` : ''}</span>
+              <span><i className="chip typical" />{t('scenarioTypical', language)}{tooltip ? `: ${Math.round(tooltip.point.p50)}` : ''}</span>
+              <span><i className="chip good" />{t('scenarioGood', language)}{tooltip ? `: ${Math.round(tooltip.point.p90)}` : ''}</span>
+              <span className="sim-threshold-chip"><i className="chip threshold" />{t('simulationThreshold', language)} {successThreshold}</span>
+            </div>
             {tooltip && (
               <div className="card sim-tooltip">
                 <strong>{t('simulationTooltipMonth', language)} {tooltip.month}</strong>
+                {pinnedIndex != null && <span className="sim-pinned-pill">{t('simulationPinnedMonth', language)} {tooltip.month}</span>}
                 <p>{t('scenarioBad', language)}: {Math.round(tooltip.point.p10)}</p>
                 <p>{t('scenarioTypical', language)}: {Math.round(tooltip.point.p50)}</p>
                 <p>{t('scenarioGood', language)}: {Math.round(tooltip.point.p90)}</p>
               </div>
             )}
-            <p>{t('simulationChanceOutOfTen', language)}: <strong>{successMeter}</strong> · {t('simulationMetaLine', language)} {successThreshold} / {horizonMonths} / {result.runs}</p>
           </div>
 
           <details className="card stack" open>
@@ -360,7 +416,6 @@ export function SimulationScreen() {
 
           <div className="card stack">
             <div className="preset-row">
-              <button onClick={makeQuest}>{t('simulationMakeQuest', language)}</button>
               <button onClick={() => { if (result) { saveBaseline({ label: new Date().toLocaleTimeString(), result: { scoreTrajectory: result.scoreTrajectory, horizonMonths: result.horizonMonths, runs: result.runs }, savedAtISO: new Date().toISOString() }); setBaseline(loadBaseline()); } }}>{t('simulationCompare', language)}</button>
             </div>
           </div>

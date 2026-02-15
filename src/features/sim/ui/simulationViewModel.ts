@@ -35,6 +35,24 @@ export function mapRawToHumanIndex(rawScore: number, low: number, high: number):
   return Math.round(Math.max(0, Math.min(100, normalized)));
 }
 
+export function successMeterLabel(value: number): 'simulationStatusFail' | 'simulationStatusEdge' | 'simulationStatusHolding' | 'simulationStatusStable' | 'simulationStatusStrong' {
+  if (value <= 1) return 'simulationStatusFail';
+  if (value <= 3) return 'simulationStatusEdge';
+  if (value <= 6) return 'simulationStatusHolding';
+  if (value <= 8) return 'simulationStatusStable';
+  return 'simulationStatusStrong';
+}
+
+export function uncertaintyEffectKey(level: number): 'simulationFutureFanNarrow' | 'simulationFutureFanMedium' | 'simulationFutureFanWide' {
+  if (level <= 1) return 'simulationFutureFanNarrow';
+  if (level <= 3) return 'simulationFutureFanMedium';
+  return 'simulationFutureFanWide';
+}
+
+export function riskEffectKey(level: number): 'simulationRiskPriceFrequent' | 'simulationRiskPriceRare' {
+  return level >= 3 ? 'simulationRiskPriceFrequent' : 'simulationRiskPriceRare';
+}
+
 export interface RiskDisplayMetric {
   shareOfWorldsPct: number;
   worldsWithEvent: number;

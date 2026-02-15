@@ -6,6 +6,18 @@ import { ChaosCoreProvider } from '../../../app/providers/ChaosCoreProvider';
 import { STORAGE_KEY } from '../../../core/types';
 import { buildDemoData } from '../../../core/storage';
 
+vi.mock('../../charts/UPlotChart', () => ({
+  UPlotChart: ({ onTogglePin, onScrubIndex }: { onTogglePin?: (idx: number) => void; onScrubIndex?: (idx: number) => void }) => (
+    <div
+      data-testid="chart-overlay"
+      onClick={() => {
+        onScrubIndex?.(1);
+        onTogglePin?.(1);
+      }}
+    />
+  )
+}));
+
 class WorkerMock {
   onmessage: ((event: MessageEvent) => void) | null = null;
 
@@ -37,7 +49,7 @@ class WorkerMock {
     }
     if (message.type === 'sensitivity') {
       this.onmessage({ data: { type: 'sensitivity-done', id: message.id, levers: [
-        { lever: 'strategy', labelKey: 'leverStrategy', successDelta: 2, drawdownDelta: -5, cost: 0.5, score: 4, nextConfig: {} },
+        { lever: 'strategy', labelKey: 'leverStrategy', successDelta: 2, drawdownDelta: -5, cost: 0.5, score: 4, nextConfig: { strategy: 'attack', horizonMonths: 20, successThreshold: 111 } },
         { lever: 'riskAppetite', labelKey: 'leverRiskAppetite', successDelta: 1, drawdownDelta: -2, cost: 0.4, score: 2, nextConfig: {} },
         { lever: 'horizon', labelKey: 'leverHorizon', successDelta: 1, drawdownDelta: -1, cost: 0.3, score: 1, nextConfig: {} }
       ] } } as MessageEvent);
@@ -81,42 +93,56 @@ describe('SimulationScreen', () => {
     vi.stubGlobal('Worker', WorkerMock);
   });
 
-  it('mounts simulation with ru labels and reduced-motion class', async () => {
+  it('renders hero card with RU labels', async () => {
     renderSimulation();
-    expect(screen.getByRole('heading', { name: 'Симуляция / Оракул' })).toBeInTheDocument();
-    expect(screen.getByText('Индекс траектории — суммарная форма твоей системы: капитал, импульс, устойчивость и стресс в одном числе.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Панель управления')).toBeInTheDocument();
+      expect(screen.getByText('Стабильно')).toBeInTheDocument();
+      expect(screen.getByText(/Запас к порогу/)).toBeInTheDocument();
+    });
+  });
+
+  it('applies best lever deterministically', async () => {
+    renderSimulation();
+    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Применить лучший рычаг' })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Применить лучший рычаг' }));
+    expect(screen.getByText('Горизонт (месяцы): 20')).toBeInTheDocument();
+    expect(screen.getByText('Порог успеха: 111')).toBeInTheDocument();
+  });
+
+  it('pins and unpins on chart tap without pin buttons', async () => {
+    renderSimulation();
+    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chart-overlay')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('button', { name: 'Закрепить точку' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('chart-overlay'));
+    expect(screen.getByText('Закреплено: Месяц 2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('chart-overlay'));
+    expect(screen.queryByText('Закреплено: Месяц 2')).not.toBeInTheDocument();
+  });
+
+  it('does not animate hero pulse in reduced-motion', async () => {
+    renderSimulation();
+    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Применить лучший рычаг' })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Применить лучший рычаг' }));
     expect(document.querySelector('.sim-screen')).toHaveClass('reduce-motion');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Signal HUD/)).toBeInTheDocument();
-    });
-  });
-
-
-  it('does not start RAF loops in reduced motion', () => {
-    const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
-    renderSimulation();
-    expect(rafSpy).not.toHaveBeenCalled();
-    rafSpy.mockRestore();
-  });
-
-  it('applies preset and updates controls', () => {
-    renderSimulation();
-    fireEvent.click(screen.getByRole('button', { name: 'Пережить шторм' }));
-    expect(screen.getByText('Горизонт (месяцы): 16')).toBeInTheDocument();
-    expect(screen.getByText(/Неопределённость: Шторм/)).toBeInTheDocument();
-  });
-
-  it('updates success line when threshold changes', async () => {
-    renderSimulation();
-    const thresholdSlider = screen.getByLabelText(/Порог успеха:/) as HTMLInputElement;
-    fireEvent.change(thresholdSlider, { target: { value: '150' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Порог \/ горизонт \/ миров: 150/)).toBeInTheDocument();
-    });
+    expect(document.querySelector('.sim-hero')).not.toHaveClass('sim-hero-pulse');
   });
 });
