@@ -30,7 +30,7 @@ class WorkerMock {
         dtDays: 5,
         endingCapital: { binEdges: [0], bins: [1], min: 0, max: 1, mean: 0.5 },
         endingResilience: { binEdges: [0], bins: [1], min: 0, max: 1, mean: 0.5 },
-        endingScore: { binEdges: [100, 140], bins: [200, 800], min: 100, max: 140, mean: 120 },
+        endingScore: { binEdges: [100, 120, 140], bins: [200, 800], min: 100, max: 140, mean: 120 },
         scorePercentiles: { p10: 100, p25: 110, p50: 120, p75: 130, p90: 138 },
         scoreTrajectory: [
           { dayOffset: 30, p10: 95, p50: 108, p90: 122 },
@@ -100,7 +100,7 @@ describe('SimulationScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('Консоль судьбы')).toBeInTheDocument();
       expect(screen.getByText('Успех')).toBeInTheDocument();
-      expect(screen.getByText(/До цели|Запас/)).toBeInTheDocument();
+      expect(screen.getByText('Шанс пройти порог')).toBeInTheDocument();
     });
   });
 
@@ -117,27 +117,33 @@ describe('SimulationScreen', () => {
     expect(screen.getByDisplayValue('111')).toBeInTheDocument();
   });
 
-  it('pins and unpins on chart tap without pin buttons', async () => {
+  it('renders Oracle Theater tabs and pins in fan tab', async () => {
     renderSimulation();
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('chart-overlay')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Веер' })).toHaveAttribute('aria-selected', 'true');
     });
 
-    expect(screen.queryByRole('button', { name: 'Закрепить точку' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('chart-overlay'));
     expect(screen.getByText('Закреплено: Месяц 2')).toBeInTheDocument();
-
     fireEvent.click(screen.getByTestId('chart-overlay'));
     expect(screen.queryByText('Закреплено: Месяц 2')).not.toBeInTheDocument();
   });
 
-  it('highlights selected dock preset', () => {
+  it('switches Oracle tabs and shows distribution + strikes copy', async () => {
     renderSimulation();
-    const storm = screen.getByRole('button', { name: 'Пережить шторм' });
-    fireEvent.click(storm);
-    expect(storm).toHaveClass('sim-dock-btn-active');
+    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Распределение' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Распределение' }));
+    expect(screen.getByText('Здесь живёт большинство миров.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Удары' }));
+    expect(screen.getByText('Анти-меры')).toBeInTheDocument();
   });
 
   it('does not animate hero pulse in reduced-motion', async () => {
