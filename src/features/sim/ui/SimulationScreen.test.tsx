@@ -133,6 +133,13 @@ describe('SimulationScreen', () => {
     expect(screen.queryByText('Закреплено: Месяц 2')).not.toBeInTheDocument();
   });
 
+  it('highlights selected dock preset', () => {
+    renderSimulation();
+    const storm = screen.getByRole('button', { name: 'Пережить шторм' });
+    fireEvent.click(storm);
+    expect(storm).toHaveClass('sim-dock-btn-active');
+  });
+
   it('does not animate hero pulse in reduced-motion', async () => {
     renderSimulation();
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
