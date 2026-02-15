@@ -121,6 +121,23 @@ export function strategicLeverTitleKey(index: number): 'simulationLeverCheapest'
   return 'simulationLeverCheapest';
 }
 
+export function formatSignedPercent(value: number): string {
+  const rounded = Math.round(value);
+  return `${rounded >= 0 ? '+' : ''}${rounded}%`;
+}
+
+export function formatSignedTenthsAsPercent(value: number): string {
+  const asPercent = Math.round(value * 10);
+  return `${asPercent >= 0 ? '+' : ''}${asPercent}%`;
+}
+
+export function buildOraclePins(length: number, pinnedIndex: number | null): number[] {
+  if (length <= 0) return [];
+  const points = new Set<number>([0, Math.max(0, Math.round(length * 0.5) - 1), length - 1]);
+  if (pinnedIndex != null) points.add(Math.max(0, Math.min(length - 1, pinnedIndex)));
+  return Array.from(points).sort((a, b) => a - b);
+}
+
 export function rankLevers(levers: SensitivityItem[]): SensitivityItem[] {
   return levers
     .slice()

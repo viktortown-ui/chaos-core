@@ -6,18 +6,6 @@ import { ChaosCoreProvider } from '../../../app/providers/ChaosCoreProvider';
 import { STORAGE_KEY } from '../../../core/types';
 import { buildDemoData } from '../../../core/storage';
 
-vi.mock('../../charts/UPlotChart', () => ({
-  UPlotChart: ({ onTogglePin, onScrubIndex }: { onTogglePin?: (idx: number) => void; onScrubIndex?: (idx: number) => void }) => (
-    <div
-      data-testid="chart-overlay"
-      onClick={() => {
-        onScrubIndex?.(1);
-        onTogglePin?.(1);
-      }}
-    />
-  )
-}));
-
 class WorkerMock {
   onmessage: ((event: MessageEvent) => void) | null = null;
 
@@ -93,57 +81,31 @@ describe('SimulationScreen', () => {
     vi.stubGlobal('Worker', WorkerMock);
   });
 
-  it('renders hero card with RU labels', async () => {
+  it('renders oracle stage KPI strip after run', async () => {
     renderSimulation();
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Консоль судьбы')).toBeInTheDocument();
-      expect(screen.getByText('Успех')).toBeInTheDocument();
-      expect(screen.getByText('Шанс пройти порог')).toBeInTheDocument();
+      expect(screen.getByText('Oracle Stage')).toBeInTheDocument();
+      expect(screen.getByText('Шанс успеха')).toBeInTheDocument();
+      expect(screen.getByText('Типичный финал')).toBeInTheDocument();
+      expect(screen.getByText('Худшая просадка')).toBeInTheDocument();
+      expect(screen.getByText('Чёрный лебедь')).toBeInTheDocument();
     });
   });
 
-  it('applies best lever deterministically', async () => {
+  it('shows three decision cards and applies best lever', async () => {
     renderSimulation();
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Применить лучший рычаг/ })).toBeEnabled();
+      expect(screen.getByText('Дешевле всего')).toBeInTheDocument();
+      expect(screen.getByText('Быстрее всего')).toBeInTheDocument();
+      expect(screen.getByText('Безопаснее всего')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Применить лучший рычаг/ }));
-    expect(screen.getByText(/Горизонт прогноза/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: /Применить/ })[0]);
     expect(screen.getByDisplayValue('111')).toBeInTheDocument();
-  });
-
-  it('renders Oracle Theater tabs and pins in fan tab', async () => {
-    renderSimulation();
-    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Веер' })).toHaveAttribute('aria-selected', 'true');
-    });
-
-    fireEvent.click(screen.getByTestId('chart-overlay'));
-    expect(screen.getByText('Закреплено: Месяц 2')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('chart-overlay'));
-    expect(screen.queryByText('Закреплено: Месяц 2')).not.toBeInTheDocument();
-  });
-
-  it('switches Oracle tabs and shows distribution + strikes copy', async () => {
-    renderSimulation();
-    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Распределение' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Распределение' }));
-    expect(screen.getByText('Здесь живёт большинство миров.')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Удары' }));
-    expect(screen.getByText('Анти-меры')).toBeInTheDocument();
   });
 
   it('does not animate hero pulse in reduced-motion', async () => {
@@ -151,7 +113,7 @@ describe('SimulationScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Применить лучший рычаг/ })).toBeEnabled();
+      expect(screen.getByText('Oracle Stage')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Применить лучший рычаг/ }));
