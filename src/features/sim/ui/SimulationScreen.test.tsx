@@ -26,7 +26,11 @@ class WorkerMock {
         ],
         endingScoresRaw: [100, 120],
         successRatio: 0.7,
-        riskEvents: { stressBreaks: 1200, drawdownsOver20: 800, blackSwans: 340 },
+        riskEvents: {
+          stressBreaks: { worldsWithEvent: 1200, totalEvents: 2800 },
+          drawdownsOver20: { worldsWithEvent: 800, totalEvents: 4900 },
+          blackSwans: { worldsWithEvent: 340, totalEvents: 460 }
+        },
         topLevers: ['strategy', 'riskAppetite', 'uncertainty']
       };
       this.onmessage({ data: { type: 'done', id: message.id, result } } as MessageEvent);
@@ -86,7 +90,7 @@ describe('SimulationScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Шанс успеха из 10/)).toBeInTheDocument();
+      expect(screen.getByText(/Signal HUD/)).toBeInTheDocument();
     });
   });
 
@@ -102,6 +106,7 @@ describe('SimulationScreen', () => {
     renderSimulation();
     fireEvent.click(screen.getByRole('button', { name: 'Пережить шторм' }));
     expect(screen.getByText('Горизонт (месяцы): 16')).toBeInTheDocument();
+    expect(screen.getByText(/Неопределённость: Шторм/)).toBeInTheDocument();
   });
 
   it('updates success line when threshold changes', async () => {

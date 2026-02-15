@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 import { scoreState } from '../../../core/sim/model';
-import { LeverKey, SimulationResult, StrategyMode } from '../../../core/sim/types';
+import { SimulationResult, StrategyMode } from '../../../core/sim/types';
 import { useReducedMotion } from '../../../fx/useReducedMotion';
 import { t } from '../../../shared/i18n';
 import { loadBaseline, loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '../../../shared/storage/simStorage';
 import { UPlotChart, UPlotSeries } from '../../charts/UPlotChart';
 import { SensitivityItem, SimConfigPayload, SimWorkerResponse } from '../worker/protocol';
+import { buildRiskDisplayMetric, DISCRETE_LEVEL_VALUES, formatMonthTick, mapRawToHumanIndex, nearestDiscreteLevel, togglePin } from './simulationViewModel';
 
 type PresetKey = 'boost' | 'stabilize' | 'storm' | 'focus' | 'diversify';
 
@@ -22,32 +23,17 @@ interface Preset {
 }
 
 const presets: Preset[] = [
-  { key: 'boost', strategy: 'attack', horizonMonths: 12, uncertainty: 0.62, riskAppetite: 0.82, blackSwanEnabled: false, threshold: 145, tradeoffKey: 'tradeoffBoost' },
-  { key: 'stabilize', strategy: 'balance', horizonMonths: 18, uncertainty: 0.4, riskAppetite: 0.45, blackSwanEnabled: true, threshold: 122, tradeoffKey: 'tradeoffStabilize' },
-  { key: 'storm', strategy: 'defense', horizonMonths: 16, uncertainty: 0.72, riskAppetite: 0.28, blackSwanEnabled: true, threshold: 110, tradeoffKey: 'tradeoffStorm' },
-  { key: 'focus', strategy: 'balance', horizonMonths: 10, uncertainty: 0.34, riskAppetite: 0.56, blackSwanEnabled: false, threshold: 126, tradeoffKey: 'tradeoffFocus' },
-  { key: 'diversify', strategy: 'balance', horizonMonths: 24, uncertainty: 0.56, riskAppetite: 0.38, blackSwanEnabled: true, threshold: 118, tradeoffKey: 'tradeoffDiversify' }
+  { key: 'boost', strategy: 'attack', horizonMonths: 12, uncertainty: 0.6, riskAppetite: 0.8, blackSwanEnabled: false, threshold: 145, tradeoffKey: 'tradeoffBoost' },
+  { key: 'stabilize', strategy: 'balance', horizonMonths: 18, uncertainty: 0.4, riskAppetite: 0.4, blackSwanEnabled: true, threshold: 122, tradeoffKey: 'tradeoffStabilize' },
+  { key: 'storm', strategy: 'defense', horizonMonths: 16, uncertainty: 0.8, riskAppetite: 0.2, blackSwanEnabled: true, threshold: 110, tradeoffKey: 'tradeoffStorm' },
+  { key: 'focus', strategy: 'balance', horizonMonths: 10, uncertainty: 0.4, riskAppetite: 0.6, blackSwanEnabled: false, threshold: 126, tradeoffKey: 'tradeoffFocus' },
+  { key: 'diversify', strategy: 'balance', horizonMonths: 24, uncertainty: 0.6, riskAppetite: 0.4, blackSwanEnabled: true, threshold: 118, tradeoffKey: 'tradeoffDiversify' }
 ];
-
-const eventInfo: Record<LeverKey | 'stressBreaks' | 'drawdownsOver20' | 'blackSwans', string> = {
-  riskAppetite: 'simulationRiskEventHintDrawdown',
-  uncertainty: 'simulationRiskEventHintStress',
-  strategy: 'simulationRiskEventHintBlackSwan',
-  horizon: 'simulationRiskEventHintDrawdown',
-  blackSwanShield: 'simulationRiskEventHintBlackSwan',
-  stressBreaks: 'simulationRiskEventHintStress',
-  drawdownsOver20: 'simulationRiskEventHintDrawdown',
-  blackSwans: 'simulationRiskEventHintBlackSwan'
-};
 
 const runsCount = 10_000;
 
 function outOfTen(value: number): number {
   return Math.round(value * 10);
-}
-
-function pct(count: number, total: number): number {
-  return total <= 0 ? 0 : Math.round((count / total) * 100);
 }
 
 export function SimulationScreen() {
@@ -135,10 +121,12 @@ export function SimulationScreen() {
   const startSimulation = () => {
     const worker = workerRef.current;
     if (!worker) return;
+    setRunning(true);
+    setProgress(0);
+    setPinnedIndex(null);
+    setScrubIndex(null);
     const requestId = `sim-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     activeIdRef.current = requestId;
-    setProgress(0);
-    setRunning(true);
     worker.postMessage({ type: 'start', id: requestId, config: buildConfig() });
 
     const sensitivityId = `sens-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -181,14 +169,14 @@ export function SimulationScreen() {
 
   const fanData = useMemo(() => {
     const trajectory = result?.scoreTrajectory ?? [];
-    const x = trajectory.map((point) => point.dayOffset * 86400);
+    const x = trajectory.map((_, index) => index + 1);
     return [
       x,
       trajectory.map((point) => point.p10),
       trajectory.map((point) => point.p50),
       trajectory.map((point) => point.p90),
       x.map(() => successThreshold),
-      ...(baseline ? [baseline.result.scoreTrajectory.map((point) => point.dayOffset * 86400), baseline.result.scoreTrajectory.map((point) => point.p50)] : [])
+      ...(baseline ? [baseline.result.scoreTrajectory.map((_, index) => index + 1), baseline.result.scoreTrajectory.map((point) => point.p50)] : [])
     ];
   }, [result, successThreshold, baseline]);
 
@@ -205,10 +193,8 @@ export function SimulationScreen() {
     if (!result || effectiveIndex == null) return null;
     const point = result.scoreTrajectory[effectiveIndex];
     if (!point) return null;
-    const month = Math.max(1, Math.round(point.dayOffset / 30));
-    const k = point.dayOffset / Math.max(1, result.horizonMonths * 30);
-    const stressCount = Math.round(result.riskEvents.stressBreaks * k);
-    return { point, month, stressCount };
+    const month = effectiveIndex + 1;
+    return { point, month };
   }, [effectiveIndex, result]);
 
   const histogram = useMemo(() => {
@@ -224,6 +210,24 @@ export function SimulationScreen() {
     momentum: (data.stats.strength + data.stats.intelligence) * 1.4,
     stress: Math.max(5, 30 - data.stats.wisdom)
   }), [data.stats.dexterity, data.stats.intelligence, data.stats.strength, data.stats.wisdom, data.xp]);
+
+  const riskSummary = useMemo(() => {
+    if (!result) return null;
+    return {
+      stressBreaks: buildRiskDisplayMetric(result.riskEvents.stressBreaks, result.runs),
+      drawdownsOver20: buildRiskDisplayMetric(result.riskEvents.drawdownsOver20, result.runs),
+      blackSwans: buildRiskDisplayMetric(result.riskEvents.blackSwans, result.runs)
+    };
+  }, [result]);
+
+  const humanIndex = result ? mapRawToHumanIndex(result.scorePercentiles.p50, result.scorePercentiles.p10, result.scorePercentiles.p90) : null;
+  const successMeter = result ? outOfTen(result.successRatio) : 0;
+  const vulnerability = riskSummary
+    ? (riskSummary.drawdownsOver20.shareOfWorldsPct >= riskSummary.stressBreaks.shareOfWorldsPct ? t('simulationDrawdowns', language) : t('simulationStressBreaks', language))
+    : '';
+
+  const uncertaintyLevel = nearestDiscreteLevel(uncertainty);
+  const riskLevel = nearestDiscreteLevel(riskAppetite);
 
   const makeQuest = () => {
     const summary = `${t('simulationQuestPrefix', language)}: ${t('simulationThreshold', language)} ${successThreshold}, ${t('simulationHorizon', language)} ${horizonMonths}`;
@@ -245,11 +249,6 @@ export function SimulationScreen() {
           ))}
         </div>
         <p><strong>{t('simulationTradeoff', language)}:</strong> {t(selectedTradeoff, language)}</p>
-        <div className="preset-row">
-          <button onClick={saveCurrentTemplate}>{t('simulationSaveTemplate', language)}</button>
-          <button onClick={() => applyPreset('stabilize')}>{t('simulationReset', language)}</button>
-        </div>
-        {templates.length > 0 && <div className="preset-row sim-templates-row">{templates.slice(0, 3).map((template) => <button key={template.id} onClick={() => applyTemplate(template)}>{template.name}</button>)}</div>}
       </div>
 
       <div className="card stack">
@@ -260,12 +259,14 @@ export function SimulationScreen() {
           <input type="range" min={80} max={180} step={1} value={successThreshold} onChange={(e) => setSuccessThreshold(Number(e.target.value))} />
         </label>
         <small>{t('simulationThresholdHelp', language)}</small>
-        <label>{t('simulationUncertainty', language)}: {uncertainty.toFixed(2)}
-          <input type="range" min={0.1} max={1} step={0.01} value={uncertainty} onChange={(e) => setUncertainty(Number(e.target.value))} />
+        <label>{t('simulationUncertainty', language)}: {t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}
+          <input type="range" min={0} max={4} step={1} value={uncertaintyLevel} onChange={(e) => setUncertainty(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
         </label>
-        <label>{t('simulationRiskAppetite', language)}: {riskAppetite.toFixed(2)}
-          <input type="range" min={0.1} max={1} step={0.01} value={riskAppetite} onChange={(e) => setRiskAppetite(Number(e.target.value))} />
+        <small>{t('simulationUncertaintyHint', language)}</small>
+        <label>{t('simulationRiskAppetite', language)}: {t(`simulationRiskLevel${riskLevel + 1}` as never, language)}
+          <input type="range" min={0} max={4} step={1} value={riskLevel} onChange={(e) => setRiskAppetite(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
         </label>
+        <small>{t('simulationRiskHint', language)}</small>
         <label>{t('simulationStrategy', language)}
           <select value={strategy} onChange={(e) => setStrategy(e.target.value as StrategyMode)}>
             <option value="attack">{t('strategyAttack', language)}</option>
@@ -277,47 +278,52 @@ export function SimulationScreen() {
           <input type="checkbox" checked={blackSwanEnabled} onChange={(e) => setBlackSwanEnabled(e.target.checked)} />
           {t('simulationBlackSwan', language)}
         </label>
-        <button onClick={startSimulation}>{isRunning ? t('simulationRunning', language) : t('simulationRun', language)}</button>
+        <div className="preset-row">
+          <button onClick={startSimulation}>{isRunning ? t('simulationRunning', language) : t('simulationRun', language)}</button>
+          <button onClick={saveCurrentTemplate}>{t('simulationSaveTemplate', language)}</button>
+          <button onClick={() => applyPreset('stabilize')}>{t('simulationReset', language)}</button>
+        </div>
+        {templates.length > 0 && <div className="preset-row sim-templates-row">{templates.slice(0, 3).map((template) => <button key={template.id} onClick={() => applyTemplate(template)}>{template.name}</button>)}</div>}
         {isRunning && <p>{t('simulationProgress', language)}: {Math.round(progress * 100)}%</p>}
       </div>
 
       {result && (
         <>
+          <div className="card stack sim-hud">
+            <strong>{t('simulationSignalHud', language)}</strong>
+            <p className="sim-meter">{successMeter}/10</p>
+            <p>{successThreshold > baseScore + 35 ? t('simulationVerdictHighThreshold', language) : t('simulationVerdictOk', language)}</p>
+            <p><strong>{t('simulationMainVulnerability', language)}:</strong> {vulnerability}</p>
+            <p><strong>{t('simulationNextActionLine', language)}:</strong> {sensitivity[0] ? t(sensitivity[0].labelKey as never, language) : t('simulationNextOne', language)}</p>
+            {humanIndex != null && <p><strong>{t('simulationHumanIndex', language)}:</strong> {humanIndex}/100</p>}
+          </div>
+
           <div className="card stack">
             <strong>{t('simulationTrajectoryTitle', language)}</strong>
-            <UPlotChart data={fanData} series={fanSeries} kind="time-series" reducedMotion={reducedMotion} ariaLabel={t('simulationTrajectoryTitle', language)} onScrubIndex={(index) => setScrubIndex(index)} />
-            <div className="preset-row">
-              <button onClick={() => setPinnedIndex(scrubIndex)}>{t('simulationPinPoint', language)}</button>
-              <button onClick={() => setPinnedIndex(null)}>{t('simulationUnpin', language)}</button>
-            </div>
+            <UPlotChart
+              data={fanData}
+              series={fanSeries}
+              kind="time-series"
+              reducedMotion={reducedMotion}
+              ariaLabel={t('simulationTrajectoryTitle', language)}
+              onScrubIndex={setScrubIndex}
+              onTogglePin={(idx) => setPinnedIndex((current) => togglePin(current, idx))}
+              xAxisConfig={{ isTimeScale: false, values: (_u, values) => values.map((value) => formatMonthTick(value)) }}
+            />
+            {pinnedIndex != null && <span className="sim-pinned-pill">{t('simulationPinned', language)}</span>}
             {tooltip && (
               <div className="card sim-tooltip">
-                <strong>{t('simulationMonth', language)} {tooltip.month}</strong>
+                <strong>{t('simulationTooltipMonth', language)} {tooltip.month}</strong>
                 <p>{t('scenarioBad', language)}: {Math.round(tooltip.point.p10)}</p>
                 <p>{t('scenarioTypical', language)}: {Math.round(tooltip.point.p50)}</p>
                 <p>{t('scenarioGood', language)}: {Math.round(tooltip.point.p90)}</p>
-                <p>{t('simulationRiskEventsSoFar', language)}: ~{tooltip.stressCount}</p>
               </div>
             )}
-            <p>{t('simulationChanceOutOfTen', language)}: <strong>{outOfTen(result.successRatio)}</strong> · {t('simulationMetaLine', language)} {successThreshold} / {horizonMonths} / {result.runs}</p>
+            <p>{t('simulationChanceOutOfTen', language)}: <strong>{successMeter}</strong> · {t('simulationMetaLine', language)} {successThreshold} / {horizonMonths} / {result.runs}</p>
           </div>
 
-          <div className="card stack">
-            <strong>{t('simulationVerdictTitle', language)}</strong>
-            <p>{successThreshold > baseScore + 35 ? t('simulationVerdictHighThreshold', language) : t('simulationVerdictOk', language)}</p>
-            <ul>
-              <li>{t('simulationWhyOne', language)}</li>
-              <li>{t('simulationWhyTwo', language)}</li>
-            </ul>
-            <strong>{t('simulationNextActionsTitle', language)}</strong>
-            <ol>
-              <li>{t('simulationNextOne', language)}</li>
-              <li>{t('simulationNextTwo', language)}</li>
-              <li>{t('simulationNextThree', language)}</li>
-            </ol>
-          </div>
-
-          <div className="card stack">
+          <details className="card stack" open>
+            <summary>{t('simulationDetails', language)}</summary>
             <strong>{t('simulationTopLevers', language)}</strong>
             <ol>
               {sensitivity.map((lever) => (
@@ -326,26 +332,36 @@ export function SimulationScreen() {
                 </li>
               ))}
             </ol>
-            <strong>{t('simulationRiskEvents', language)}</strong>
-            <p title={t(eventInfo.stressBreaks as never, language)}>{t('simulationStressBreaks', language)}: {pct(result.riskEvents.stressBreaks, result.runs)}% <small>({result.riskEvents.stressBreaks}/{result.runs})</small></p>
-            <p title={t(eventInfo.drawdownsOver20 as never, language)}>{t('simulationDrawdowns', language)}: {pct(result.riskEvents.drawdownsOver20, result.runs)}% <small>({result.riskEvents.drawdownsOver20}/{result.runs})</small></p>
-            <p title={t(eventInfo.blackSwans as never, language)}>{t('simulationBlackSwansCount', language)}: {pct(result.riskEvents.blackSwans, result.runs)}% <small>({result.riskEvents.blackSwans}/{result.runs})</small></p>
-          </div>
+            {riskSummary && (
+              <>
+                <strong>{t('simulationRiskEvents', language)}</strong>
+                <p>{t('simulationStressBreaks', language)}: {Math.round(riskSummary.stressBreaks.shareOfWorldsPct)}% {t('simulationWorldsSuffix', language)} ({riskSummary.stressBreaks.worldsWithEvent}/{result.runs}) · {riskSummary.stressBreaks.avgPerWorld.toFixed(1)} {t('simulationEventsPerWorld', language)}</p>
+                <p>{t('simulationDrawdowns', language)}: {Math.round(riskSummary.drawdownsOver20.shareOfWorldsPct)}% {t('simulationWorldsSuffix', language)} ({riskSummary.drawdownsOver20.worldsWithEvent}/{result.runs}) · {riskSummary.drawdownsOver20.avgPerWorld.toFixed(1)} {t('simulationEventsPerWorld', language)}</p>
+                <p>{t('simulationBlackSwansCount', language)}: {Math.round(riskSummary.blackSwans.shareOfWorldsPct)}% {t('simulationWorldsSuffix', language)} ({riskSummary.blackSwans.worldsWithEvent}/{result.runs}) · {riskSummary.blackSwans.avgPerWorld.toFixed(1)} {t('simulationEventsPerWorld', language)}</p>
+              </>
+            )}
 
-          <div className="card stack">
             <strong>{t('simulationHistogramTitle', language)}</strong>
             <div className="sim-histogram" role="img" aria-label={t('simulationHistogramTitle', language)}>
               {histogram?.map((height, index) => (
                 <div key={index} className="sim-bar" style={{ height: `${height}%` }} />
               ))}
             </div>
-          </div>
+
+            <details>
+              <summary>{t('simulationAdvanced', language)}</summary>
+              <p>{t('simulationRawMedian', language)}: {Math.round(result.scorePercentiles.p50)}</p>
+              <p>{t('simulationRawP10', language)}: {Math.round(result.scorePercentiles.p10)}</p>
+              <p>{t('simulationRawP90', language)}: {Math.round(result.scorePercentiles.p90)}</p>
+              <p>{t('simulationRawUncertainty', language)}: {uncertainty.toFixed(2)}</p>
+              <p>{t('simulationRawRiskAppetite', language)}: {riskAppetite.toFixed(2)}</p>
+            </details>
+          </details>
 
           <div className="card stack">
             <div className="preset-row">
               <button onClick={makeQuest}>{t('simulationMakeQuest', language)}</button>
               <button onClick={() => { if (result) { saveBaseline({ label: new Date().toLocaleTimeString(), result: { scoreTrajectory: result.scoreTrajectory, horizonMonths: result.horizonMonths, runs: result.runs }, savedAtISO: new Date().toISOString() }); setBaseline(loadBaseline()); } }}>{t('simulationCompare', language)}</button>
-              <button onClick={saveCurrentTemplate}>{t('simulationSaveTemplate', language)}</button>
             </div>
           </div>
         </>

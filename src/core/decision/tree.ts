@@ -177,9 +177,9 @@ export interface BranchSimulationInput {
 
 export function computeCollapseRisk(result: SimulationResult): number {
   const runSafe = Math.max(1, result.runs);
-  const stressRate = result.riskEvents.stressBreaks / runSafe;
-  const drawdownRate = result.riskEvents.drawdownsOver20 / runSafe;
-  const blackSwanRate = result.riskEvents.blackSwans / runSafe;
+  const stressRate = result.riskEvents.stressBreaks.worldsWithEvent / runSafe;
+  const drawdownRate = result.riskEvents.drawdownsOver20.worldsWithEvent / runSafe;
+  const blackSwanRate = result.riskEvents.blackSwans.worldsWithEvent / runSafe;
   const resiliencePenalty = Math.max(0, 1 - result.endingResilience.mean / 100);
 
   return Math.min(1, stressRate * 0.35 + drawdownRate * 0.35 + blackSwanRate * 0.2 + resiliencePenalty * 0.1);

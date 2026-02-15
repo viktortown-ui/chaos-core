@@ -38,10 +38,15 @@ export interface Percentiles {
   p90: number;
 }
 
+export interface RiskEventMetric {
+  worldsWithEvent: number;
+  totalEvents: number;
+}
+
 export interface RiskEvents {
-  stressBreaks: number;
-  drawdownsOver20: number;
-  blackSwans: number;
+  stressBreaks: RiskEventMetric;
+  drawdownsOver20: RiskEventMetric;
+  blackSwans: RiskEventMetric;
 }
 
 export interface TrajectoryPoint {
