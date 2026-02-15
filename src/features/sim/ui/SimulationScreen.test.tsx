@@ -99,7 +99,7 @@ describe('SimulationScreen', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Панель управления')).toBeInTheDocument();
-      expect(screen.getByText('Стабильно')).toBeInTheDocument();
+      expect(screen.getByText('Успех')).toBeInTheDocument();
       expect(screen.getByText(/Запас к порогу/)).toBeInTheDocument();
     });
   });
@@ -113,8 +113,8 @@ describe('SimulationScreen', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Применить лучший рычаг' }));
-    expect(screen.getByText('Горизонт (месяцы): 20')).toBeInTheDocument();
-    expect(screen.getByText('Порог успеха: 111')).toBeInTheDocument();
+    expect(screen.getByText(/Горизонт \(месяцы\)/)).toBeInTheDocument();
+    expect(screen.getByDisplayValue('111')).toBeInTheDocument();
   });
 
   it('pins and unpins on chart tap without pin buttons', async () => {

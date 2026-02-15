@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRiskDisplayMetric, formatMonthTick, nearestDiscreteLevel, togglePin } from './simulationViewModel';
+import { buildRiskDisplayMetric, formatMonthTick, heroStatusLabel, nearestDiscreteLevel, togglePin } from './simulationViewModel';
 
 describe('simulation view model helpers', () => {
   it('formats x-axis as months and never 1970 date labels', () => {
@@ -24,5 +24,11 @@ describe('simulation view model helpers', () => {
   it('maps slider values to discrete levels', () => {
     expect(nearestDiscreteLevel(0.34)).toBe(1);
     expect(nearestDiscreteLevel(0.56)).toBe(2);
+  });
+
+  it('maps hero status to 3-state labels', () => {
+    expect(heroStatusLabel(2)).toBe('simulationHeroStatusFail');
+    expect(heroStatusLabel(5)).toBe('simulationHeroStatusEdge');
+    expect(heroStatusLabel(7)).toBe('simulationHeroStatusSuccess');
   });
 });
