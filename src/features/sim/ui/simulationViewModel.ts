@@ -2,6 +2,7 @@ import { RiskEvents } from '../../../core/sim/types';
 import { SensitivityItem } from '../worker/protocol';
 
 interface PercentilePoint {
+  dayOffset?: number;
   p10: number;
   p50: number;
   p90: number;
@@ -147,12 +148,15 @@ export function formatAdaptive(value: number): string {
   return rounded.toFixed(1);
 }
 
-export function findFailureWindow(points: FanPoint[], threshold: number): { fromMonth: number; toMonth: number } | null {
+export function findFailureWindow(points: FanPoint[], threshold: number, horizonMonths?: number): { fromMonth: number; toMonth: number } | null {
   const failing = points.filter((point) => point.p50 < threshold).map((point) => point.month);
   if (failing.length === 0) return null;
+  const safeHorizon = typeof horizonMonths === 'number' ? Math.max(1, Math.round(horizonMonths)) : null;
+  const fromMonth = safeHorizon == null ? failing[0] : Math.min(failing[0], safeHorizon);
+  const toMonthRaw = failing[failing.length - 1];
   return {
-    fromMonth: failing[0],
-    toMonth: failing[failing.length - 1]
+    fromMonth,
+    toMonth: safeHorizon == null ? toMonthRaw : Math.min(toMonthRaw, safeHorizon)
   };
 }
 
@@ -163,7 +167,12 @@ function toStrength(score: number): DriverInsight['strengthKey'] {
 }
 
 export function buildDrivers(levers: SensitivityItem[]): DriverInsight[] {
-  return levers.slice(0, 3).map((lever, index) => {
+  const unique = levers
+    .filter((lever) => Math.abs(lever.successDelta) + Math.abs(lever.drawdownDelta) > 0)
+    .filter((lever, index, source) => source.findIndex((item) => item.lever === lever.lever) === index)
+    .slice(0, 3);
+
+  return unique.map((lever, index) => {
     const key = `${lever.lever}-${index}`;
     if (lever.lever === 'uncertainty') {
       return {
@@ -238,12 +247,17 @@ export interface FanPoint {
   p90: number;
 }
 
-export function buildFanPoints(trajectory: PercentilePoint[]): FanPoint[] {
+export function buildFanPoints(trajectory: PercentilePoint[], horizonMonths: number): FanPoint[] {
+  const safeHorizon = Math.max(1, Math.round(horizonMonths));
   return trajectory.map((point, index) => {
+    const rawMonth = point.dayOffset != null
+      ? Math.max(1, Math.ceil(point.dayOffset / 30))
+      : Math.max(1, Math.round(((index + 1) / Math.max(1, trajectory.length)) * safeHorizon));
+    const month = Math.min(safeHorizon, rawMonth);
     const lowerSpan = point.p50 - point.p10;
     const upperSpan = point.p90 - point.p50;
     return {
-      month: index + 1,
+      month,
       p10: point.p10,
       p25: point.p10 + lowerSpan * 0.5,
       p50: point.p50,

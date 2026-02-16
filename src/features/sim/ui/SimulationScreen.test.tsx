@@ -91,8 +91,8 @@ describe('SimulationScreen', () => {
       expect(screen.getByText('Как читать график')).toBeInTheDocument();
       expect(screen.getByText('Почему так вышло (Top-3 драйверов)')).toBeInTheDocument();
       expect(screen.getByText('Шанс успеха')).toBeInTheDocument();
-      expect(screen.getByText('Типичный финал')).toBeInTheDocument();
-      expect(screen.getByText('Плохие 10% миров (P10)')).toBeInTheDocument();
+      expect(screen.getByText('Типичный сценарий (обычно)')).toBeInTheDocument();
+      expect(screen.getByText('Жёсткий сценарий (плохие 10%)')).toBeInTheDocument();
     });
   });
 
@@ -108,6 +108,17 @@ describe('SimulationScreen', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: /Применить/ })[0]);
     expect(screen.getByDisplayValue('111')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Пересчитать' })).toBeInTheDocument();
+  });
+
+
+  it('opens 3-step quest modal', async () => {
+    renderSimulation();
+    fireEvent.click(screen.getByRole('button', { name: /Сделать это квестом/ }));
+    expect(screen.getByRole('dialog', { name: 'Сделать это квестом' })).toBeInTheDocument();
+    expect(screen.getByText(/Шаг 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Шаг 2/)).toBeInTheDocument();
+    expect(screen.getByText(/Шаг 3/)).toBeInTheDocument();
   });
 
   it('does not animate hero pulse in reduced-motion', async () => {

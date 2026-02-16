@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { FloatingPortal, offset, shift, useClick, useDismiss, useFloating, useInteractions, useRole } from '@floating-ui/react';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 import { SimulationResult, StrategyMode } from '../../../core/sim/types';
 import { useReducedMotion } from '../../../fx/useReducedMotion';
 import { Language, t } from '../../../shared/i18n';
 import { loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '../../../shared/storage/simStorage';
 import { SensitivityItem, SimConfigPayload, SimWorkerResponse } from '../worker/protocol';
-import { buildDrivers, buildFanPoints, buildHeadroomChipModel, buildOraclePins, buildRiskDisplayMetric, buildSpreadChipModel, DISCRETE_LEVEL_VALUES, DriverInsight, FanPoint, findFailureWindow, formatAdaptive, formatSignedPercent, formatSignedTenthsAsPercent, heroStatusLabel, nearestDiscreteLevel, rankLevers, riskCostLineKey, riskEffectKey, strategicLeverTitleKey, successMeterLabel, uncertaintyEffectKey } from './simulationViewModel';
+import { buildDrivers, buildFanPoints, buildHeadroomChipModel, buildOraclePins, buildRiskDisplayMetric, buildSpreadChipModel, DISCRETE_LEVEL_VALUES, DriverInsight, FanPoint, findFailureWindow, formatAdaptive, formatSignedPercent, formatSignedTenthsAsPercent, heroStatusLabel, mapRawToHumanIndex, nearestDiscreteLevel, rankLevers, riskCostLineKey, riskEffectKey, strategicLeverTitleKey, successMeterLabel, uncertaintyEffectKey } from './simulationViewModel';
 
 type PresetKey = 'boost' | 'stabilize' | 'storm' | 'focus' | 'diversify';
 
@@ -118,13 +119,46 @@ function CoreOrb({ reducedMotion, score }: { reducedMotion: boolean; score: numb
   return <canvas ref={canvasRef} className="sim-orb" width={150} height={150} aria-hidden="true" />;
 }
 
+type ChartMode = 'line' | 'fan' | 'cloud';
+
+function HelpPopover({ label, text }: { label: string; text: string }) {
+  const [open, setOpen] = useState(false);
+  const { refs, floatingStyles, context } = useFloating({
+    open,
+    onOpenChange: setOpen,
+    middleware: [offset(8), shift({ padding: 8 })]
+  });
+  const click = useClick(context);
+  const dismiss = useDismiss(context);
+  const role = useRole(context, { role: 'dialog' });
+  const { getReferenceProps, getFloatingProps } = useInteractions([click, dismiss, role]);
+
+  return (
+    <>
+      <button type="button" ref={refs.setReference} className="sim-help-dot" aria-label={label} {...getReferenceProps()}>
+        ?
+      </button>
+      {open && (
+        <FloatingPortal>
+          <div ref={refs.setFloating} style={floatingStyles} className="sim-tooltip" {...getFloatingProps()}>
+            <strong>{label}</strong>
+            <p>{text}</p>
+          </div>
+        </FloatingPortal>
+      )}
+    </>
+  );
+}
+
 function OracleCanvas({
   fanPoints,
   threshold,
   pinnedMonths,
   reducedMotion,
   ariaLabel,
-  pinLabel
+  pinLabel,
+  mode,
+  language
 }: {
   fanPoints: FanPoint[];
   threshold: number;
@@ -132,8 +166,11 @@ function OracleCanvas({
   reducedMotion: boolean;
   ariaLabel: string;
   pinLabel: string;
+  mode: ChartMode;
+  language: Language;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -171,29 +208,36 @@ function OracleCanvas({
       }
       ctx.fillRect(0, 0, width, height);
 
-      ctx.beginPath();
-      fanPoints.forEach((point, index) => {
-        const x = toX(index);
-        const y = toY(point.p90);
-        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      for (let index = fanPoints.length - 1; index >= 0; index -= 1) {
-        const x = toX(index);
-        const y = toY(fanPoints[index].p10);
-        ctx.lineTo(x, y);
+      if (mode !== 'line') {
+        ctx.beginPath();
+        fanPoints.forEach((point, index) => {
+          const x = toX(index);
+          const y = toY(point.p90);
+          if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        for (let index = fanPoints.length - 1; index >= 0; index -= 1) {
+          const x = toX(index);
+          const y = toY(fanPoints[index].p10);
+          ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        const coneFill = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH) : null;
+        if (coneFill) {
+          if (mode === 'cloud') {
+            coneFill.addColorStop(0, 'rgba(130,170,255,0.36)');
+            coneFill.addColorStop(1, 'rgba(88,130,199,0.04)');
+          } else {
+            coneFill.addColorStop(0, 'rgba(71,153,255,0.32)');
+            coneFill.addColorStop(1, 'rgba(71,153,255,0.08)');
+          }
+          ctx.fillStyle = coneFill;
+        } else {
+          ctx.fillStyle = 'rgba(71,153,255,0.16)';
+        }
+        ctx.fill();
       }
-      ctx.closePath();
-      const coneFill = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH) : null;
-      if (coneFill) {
-        coneFill.addColorStop(0, 'rgba(71,153,255,0.32)');
-        coneFill.addColorStop(1, 'rgba(71,153,255,0.08)');
-        ctx.fillStyle = coneFill;
-      } else {
-        ctx.fillStyle = 'rgba(71,153,255,0.16)';
-      }
-      ctx.fill();
 
-      const drawLine = (extractor: (point: FanPoint) => number, color: string, widthPx: number) => {
+      const drawLine = (extractor: (point: FanPoint) => number, color: string, widthPx: number, dash: number[] = []) => {
         ctx.beginPath();
         fanPoints.forEach((point, index) => {
           const x = toX(index);
@@ -202,13 +246,13 @@ function OracleCanvas({
         });
         ctx.strokeStyle = color;
         ctx.lineWidth = widthPx;
-        ctx.setLineDash([]);
+        ctx.setLineDash(dash);
         ctx.stroke();
       };
 
-      drawLine((point) => point.p10, '#ff9f95', 1.8);
+      drawLine((point) => point.p10, '#ff9f95', 1.8, mode === 'line' ? [7, 5] : []);
       drawLine((point) => point.p50, '#89ffd2', 2.8);
-      drawLine((point) => point.p90, '#8ec5ff', 1.8);
+      drawLine((point) => point.p90, '#8ec5ff', 1.8, mode === 'line' ? [7, 5] : []);
 
       ctx.beginPath();
       ctx.setLineDash([8, 6]);
@@ -220,7 +264,8 @@ function OracleCanvas({
       ctx.setLineDash([]);
 
       pinnedMonths.forEach((monthIndex) => {
-        const x = toX(monthIndex);
+        const clampedIndex = Math.max(0, Math.min(fanPoints.length - 1, monthIndex));
+        const x = toX(clampedIndex);
         ctx.beginPath();
         ctx.moveTo(x, pad.top);
         ctx.lineTo(x, pad.top + chartH);
@@ -230,8 +275,19 @@ function OracleCanvas({
         ctx.fillStyle = 'rgba(235,244,255,0.9)';
         ctx.font = '600 11px Inter, system-ui, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`${pinLabel} ${monthIndex + 1}`, x, height - 10);
+        ctx.fillText(`${pinLabel} ${fanPoints[clampedIndex].month}`, x, height - 10);
       });
+
+      if (activeIndex != null) {
+        const index = Math.max(0, Math.min(fanPoints.length - 1, activeIndex));
+        const x = toX(index);
+        ctx.beginPath();
+        ctx.moveTo(x, pad.top);
+        ctx.lineTo(x, pad.top + chartH);
+        ctx.strokeStyle = '#f7d388';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
 
       if (!reducedMotion) {
         const phase = time / 420;
@@ -260,9 +316,43 @@ function OracleCanvas({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [fanPoints, pinnedMonths, reducedMotion, threshold, pinLabel]);
+  }, [activeIndex, fanPoints, mode, pinnedMonths, reducedMotion, threshold, pinLabel]);
 
-  return <canvas ref={canvasRef} className="oracle-canvas" role="img" aria-label={ariaLabel} />;
+  const onMove = (clientX: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas || fanPoints.length === 0) return;
+    const bounds = canvas.getBoundingClientRect();
+    const relativeX = Math.max(0, Math.min(bounds.width, clientX - bounds.left));
+    const nextIndex = Math.round((relativeX / Math.max(1, bounds.width)) * (fanPoints.length - 1));
+    setActiveIndex(nextIndex);
+  };
+
+  const activePoint = activeIndex == null ? null : fanPoints[Math.max(0, Math.min(fanPoints.length - 1, activeIndex))];
+
+  return (
+    <div className="oracle-canvas-wrap">
+      <canvas
+        ref={canvasRef}
+        className="oracle-canvas"
+        role="img"
+        aria-label={ariaLabel}
+        onPointerDown={(event) => onMove(event.clientX)}
+        onPointerMove={(event) => {
+          if (event.pointerType === 'mouse' && (event.buttons & 1) !== 1) return;
+          onMove(event.clientX);
+        }}
+        onPointerLeave={() => setActiveIndex(null)}
+      />
+      {activePoint && (
+        <div className="oracle-canvas-tooltip" role="status" aria-live="polite">
+          <strong>{pinLabel} {activePoint.month}</strong>
+          <p>{t('scenarioBad', language)}: {formatAdaptive(activePoint.p10)}</p>
+          <p>{t('scenarioTypical', language)}: {formatAdaptive(activePoint.p50)}</p>
+          <p>{t('scenarioGood', language)}: {formatAdaptive(activePoint.p90)}</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 
@@ -341,6 +431,10 @@ export function SimulationScreen() {
   const [progress, setProgress] = useState(0);
   const [isRunning, setRunning] = useState(false);
   const [heroPulse, setHeroPulse] = useState(false);
+  const [needsRecalc, setNeedsRecalc] = useState(false);
+  const [chartPeriod, setChartPeriod] = useState<3 | 6 | 12 | 24 | 'all'>('all');
+  const [chartMode, setChartMode] = useState<ChartMode>('fan');
+  const [isQuestOpen, setQuestOpen] = useState(false);
 
   const workerRef = useRef<Worker | null>(null);
   const activeIdRef = useRef<string | null>(null);
@@ -373,6 +467,7 @@ export function SimulationScreen() {
         setRunning(false);
         setProgress(1);
         setResult(message.result);
+        setNeedsRecalc(false);
       }
       if (message.type === 'cancelled' || message.type === 'error') {
         setRunning(false);
@@ -409,10 +504,13 @@ export function SimulationScreen() {
     successThreshold
   });
 
+  const markDirty = () => setNeedsRecalc(true);
+
   const startSimulation = () => {
     const worker = workerRef.current;
     if (!worker) return;
     setRunning(true);
+    setNeedsRecalc(false);
     setProgress(0);
     const requestId = `sim-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     activeIdRef.current = requestId;
@@ -433,6 +531,7 @@ export function SimulationScreen() {
     setStrategy(preset.strategy);
     setBlackSwanEnabled(preset.blackSwanEnabled);
     setSuccessThreshold(preset.threshold);
+    markDirty();
   };
 
   const saveCurrentTemplate = () => {
@@ -454,20 +553,26 @@ export function SimulationScreen() {
     if (cfg.strategy) setStrategy(cfg.strategy);
     if (typeof cfg.blackSwanEnabled === 'boolean') setBlackSwanEnabled(cfg.blackSwanEnabled);
     if (typeof cfg.successThreshold === 'number') setSuccessThreshold(cfg.successThreshold);
+    markDirty();
   };
 
-  const applyBestLever = () => {
-    const best = sensitivity[0];
-    if (!best) return;
-    const cfg = best.nextConfig;
+  const applyLever = (lever: SensitivityItem) => {
+    const cfg = lever.nextConfig;
     if (typeof cfg.horizonMonths === 'number') setHorizonMonths(cfg.horizonMonths);
     if (typeof cfg.riskAppetite === 'number') setRiskAppetite(cfg.riskAppetite);
     if (typeof cfg.successThreshold === 'number') setSuccessThreshold(cfg.successThreshold);
     if (cfg.strategy) setStrategy(cfg.strategy);
     pulseAndVibrate(() => setHeroPulse(true), reducedMotion);
+    markDirty();
   };
 
-  const fanPoints = useMemo(() => buildFanPoints(result?.scoreTrajectory ?? []), [result]);
+  const applyBestLever = () => {
+    const best = sensitivity[0];
+    if (!best) return;
+    applyLever(best);
+  };
+
+  const fanPoints = useMemo(() => buildFanPoints(result?.scoreTrajectory ?? [], horizonMonths), [horizonMonths, result]);
 
   const selectedTradeoff = presets.find((preset) => preset.key === selectedPreset)?.tradeoffKey ?? 'tradeoffStabilize';
 
@@ -494,12 +599,19 @@ export function SimulationScreen() {
   const spreadChip = spread == null ? null : buildSpreadChipModel(spread);
   const topStrategicLevers = rankLevers(sensitivity).slice(0, 3);
 
-  const oraclePins = useMemo(() => buildOraclePins(fanPoints.length, null), [fanPoints.length]);
+  const filteredFanPoints = useMemo(() => {
+    if (chartPeriod === 'all') return fanPoints;
+    return fanPoints.filter((point) => point.month <= chartPeriod);
+  }, [chartPeriod, fanPoints]);
+
+  const oraclePins = useMemo(() => buildOraclePins(filteredFanPoints.length, null), [filteredFanPoints.length]);
 
   const successWorlds = result ? Math.round(result.successRatio * result.runs) : 0;
-  const failureWindow = useMemo(() => findFailureWindow(fanPoints, successThreshold), [fanPoints, successThreshold]);
+  const failureWindow = useMemo(() => findFailureWindow(filteredFanPoints, successThreshold, horizonMonths), [filteredFanPoints, horizonMonths, successThreshold]);
   const drivers = useMemo(() => buildDrivers(topStrategicLevers), [topStrategicLevers]);
 
+  const resilience = result ? mapRawToHumanIndex(result.scorePercentiles.p50, result.scorePercentiles.p10, result.scorePercentiles.p90) : 0;
+  const resilienceStatusKey = resilience < 40 ? 'simulationResilienceLow' : resilience < 70 ? 'simulationResilienceMedium' : 'simulationResilienceHigh';
   const kpiMetrics = result && riskSummary ? [
     {
       labelKey: 'simulationOracleKpiSuccess',
@@ -507,25 +619,40 @@ export function SimulationScreen() {
       hintKey: 'simulationOracleKpiSuccessHint'
     },
     {
-      labelKey: 'simulationOracleKpiTypical',
-      value: `${formatAdaptive(result.scorePercentiles.p50)} ${t('simulationOracleUnitsCorePoints', language)}`,
-      hintKey: 'simulationOracleKpiTypicalHint'
+      labelKey: 'simulationOracleKpiHardScenario',
+      value: formatAdaptive(result.scorePercentiles.p10),
+      hintKey: 'simulationOracleKpiHardScenarioHint'
     },
     {
-      labelKey: 'simulationOracleKpiDrawdown',
-      value: `${formatAdaptive(result.scorePercentiles.p10)} ${t('simulationOracleUnitsCorePoints', language)}`,
-      hintKey: 'simulationOracleKpiDrawdownHint'
+      labelKey: 'simulationOracleKpiTypicalScenario',
+      value: formatAdaptive(result.scorePercentiles.p50),
+      hintKey: 'simulationOracleKpiTypicalScenarioHint'
+    },
+    {
+      labelKey: 'simulationOracleKpiLightScenario',
+      value: formatAdaptive(result.scorePercentiles.p90),
+      hintKey: 'simulationOracleKpiLightScenarioHint'
+    },
+    {
+      labelKey: 'simulationOracleKpiResilience',
+      value: `${resilience}/100 · ${t(resilienceStatusKey as never, language)}`,
+      hintKey: 'simulationOracleKpiResilienceHint'
     }
   ] : [];
   const uncertaintyLevel = nearestDiscreteLevel(uncertainty);
   const riskLevel = nearestDiscreteLevel(riskAppetite);
 
   const makeQuest = () => {
+    setQuestOpen(true);
+  };
+
+  const createQuestStub = () => {
     const summary = `${t('simulationQuestPrefix', language)}: ${t('simulationThreshold', language)} ${successThreshold}, ${t('simulationHorizon', language)} ${horizonMonths}`;
     setData((current) => ({
       ...current,
       history: [{ id: `quest-${Date.now()}`, kind: 'quest', note: summary, atISO: new Date().toISOString() }, ...current.history]
     }));
+    setQuestOpen(false);
   };
 
   return (
@@ -617,29 +744,29 @@ export function SimulationScreen() {
         <div className="stack">
           <div className="cosHudRow">
             <label>{t('simulationHorizonForecast', language)} <span className="cosChip sim-value-pill">{horizonMonths} {t('simulationMonthsShort', language)}</span>
-              <input type="range" min={6} max={30} value={horizonMonths} onChange={(e) => setHorizonMonths(Number(e.target.value))} />
+              <input type="range" min={6} max={30} value={horizonMonths} onChange={(e) => { setHorizonMonths(Number(e.target.value)); markDirty(); }} />
               <small>{t('simulationHorizonHelper', language)}</small>
             </label>
             <label>{t('simulationThresholdGoal', language)} <span className="cosChip sim-value-pill">{successThreshold}</span>
-              <input type="range" min={80} max={180} step={1} value={successThreshold} onChange={(e) => setSuccessThreshold(Number(e.target.value))} />
+              <input type="range" min={80} max={180} step={1} value={successThreshold} onChange={(e) => { setSuccessThreshold(Number(e.target.value)); markDirty(); }} />
               <small>{t('simulationThresholdGoalHelper', language)}</small>
             </label>
           </div>
 
           <div className="cosHudRow">
-            <label>{t('simulationFogLabel', language)} <span className="cosChip sim-value-pill">{t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}</span> <span title={t('simulationUncertaintyTooltip', language)} className="sim-help-dot">?</span>
-              <input type="range" min={0} max={4} step={1} value={uncertaintyLevel} onChange={(e) => setUncertainty(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
+            <label>{t('simulationFogLabel', language)} <span className="cosChip sim-value-pill">{t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}</span> <HelpPopover label={t('simulationFogLabel', language)} text={t('simulationUncertaintyTooltip', language)} />
+              <input type="range" min={0} max={4} step={1} value={uncertaintyLevel} onChange={(e) => { setUncertainty(DISCRETE_LEVEL_VALUES[Number(e.target.value)]); markDirty(); }} />
               <small>{t('simulationFogHelper', language)} {t(uncertaintyEffectKey(uncertaintyLevel), language)}</small>
             </label>
-            <label>{t('simulationCourageLabel', language)} <span className="cosChip sim-value-pill">{t(`simulationRiskLevel${riskLevel + 1}` as never, language)}</span> <span title={t('simulationRiskTooltip', language)} className="sim-help-dot">?</span>
-              <input type="range" min={0} max={4} step={1} value={riskLevel} onChange={(e) => setRiskAppetite(DISCRETE_LEVEL_VALUES[Number(e.target.value)])} />
+            <label>{t('simulationCourageLabel', language)} <span className="cosChip sim-value-pill">{t(`simulationRiskLevel${riskLevel + 1}` as never, language)}</span> <HelpPopover label={t('simulationCourageLabel', language)} text={t('simulationRiskTooltip', language)} />
+              <input type="range" min={0} max={4} step={1} value={riskLevel} onChange={(e) => { setRiskAppetite(DISCRETE_LEVEL_VALUES[Number(e.target.value)]); markDirty(); }} />
               <small>{t('simulationCourageHelper', language)} {t(riskEffectKey(riskLevel), language)}</small>
             </label>
           </div>
 
           <div className="cosHudRow">
             <label>{t('simulationStrategy', language)}
-              <select value={strategy} onChange={(e) => setStrategy(e.target.value as StrategyMode)}>
+              <select value={strategy} onChange={(e) => { setStrategy(e.target.value as StrategyMode); markDirty(); }}>
                 <option value="attack">{t('strategyAttack', language)}</option>
                 <option value="balance">{t('strategyBalance', language)}</option>
                 <option value="defense">{t('strategyDefense', language)}</option>
@@ -647,7 +774,7 @@ export function SimulationScreen() {
             </label>
             <label className="sim-black-swan-control">
               <span>
-                <input type="checkbox" checked={blackSwanEnabled} onChange={(e) => setBlackSwanEnabled(e.target.checked)} />
+                <input type="checkbox" checked={blackSwanEnabled} onChange={(e) => { setBlackSwanEnabled(e.target.checked); markDirty(); }} />
                 {t('simulationBlackSwanRealityLabel', language)}
               </span>
               <small>{t('simulationBlackSwanRealityHelper', language)}</small>
@@ -659,7 +786,7 @@ export function SimulationScreen() {
             </label>
           </div>
           <div className="preset-row">
-            <button className="cosBtn" onClick={startSimulation}>{isRunning ? t('simulationRunning', language) : t('simulationRun', language)}</button>
+            <button className="cosBtn" onClick={startSimulation}>{isRunning ? t('simulationRunning', language) : needsRecalc ? t('simulationRecalculate', language) : t('simulationRun', language)}</button>
             <button className="cosBtn cosBtn--ghost" onClick={saveCurrentTemplate}>{t('simulationSaveTemplate', language)}</button>
             <button className="cosBtn cosBtn--ghost" onClick={() => applyPreset('stabilize')}>{t('simulationReset', language)}</button>
           </div>
@@ -675,6 +802,33 @@ export function SimulationScreen() {
               <strong>{t('simulationOracleStageTitle', language)}</strong>
               <span className="cosChip">{t('simulationOracleStageSub', language)}</span>
             </div>
+            <div className="oracle-chart-toolbar">
+              <div className="oracle-period-switch">
+                {([3, 6, 12, 24, 'all'] as const).map((period) => (
+                  <button
+                    key={period}
+                    type="button"
+                    className={`cosBtn cosBtn--ghost${chartPeriod === period ? ' sim-dock-btn-active' : ''}`}
+                    onClick={() => setChartPeriod(period)}
+                  >
+                    {period === 'all' ? t('simulationPeriodAll', language) : `${period}${t('simulationMonthsShort', language)}`}
+                  </button>
+                ))}
+              </div>
+              <div className="oracle-mode-switch">
+                {(['line', 'fan', 'cloud'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`cosBtn cosBtn--ghost${chartMode === mode ? ' sim-dock-btn-active' : ''}`}
+                    onClick={() => setChartMode(mode)}
+                  >
+                    {t((mode === 'line' ? 'simulationChartModeLine' : mode === 'fan' ? 'simulationChartModeFan' : 'simulationChartModeCloud') as never, language)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <OutcomeSummary
               language={language}
               successRatio={result.successRatio}
@@ -685,12 +839,14 @@ export function SimulationScreen() {
               scoreP50={result.scorePercentiles.p50}
             />
             <OracleCanvas
-              fanPoints={fanPoints}
+              fanPoints={filteredFanPoints}
               threshold={successThreshold}
               pinnedMonths={oraclePins}
               reducedMotion={reducedMotion}
               ariaLabel={t('simulationTrajectoryTitle', language)}
               pinLabel={t('simulationTooltipMonth', language)}
+              mode={chartMode}
+              language={language}
             />
             <OracleHowToRead language={language} />
             <div className="oracle-kpi-strip">
@@ -714,7 +870,7 @@ export function SimulationScreen() {
                   <p className="oracle-command-line">{t('simulationOracleDo', language)}: {t(lever.labelKey as never, language)}</p>
                   <p className="oracle-command-impact">{t('simulationOracleEffect', language)}: {t('simulationLeverSuccessDelta', language)} {formatSignedTenthsAsPercent(lever.successDelta)} · {t('simulationLeverDrawdownDelta', language)} {formatSignedPercent(lever.drawdownDelta)}</p>
                   <p className="oracle-command-impact">{t('simulationExpectedEffect', language)}: {t('simulationExpectedEffectChance', language)} {Math.round(result.successRatio * 100)}% → {nextSuccessPct}% · {t('simulationExpectedEffectWorlds', language)} {successWorlds} → {nextSuccessWorlds}</p>
-                  <button className="cosBtn cosBtn--ghost" onClick={applyBestLever}>{t('simulationApplyLever', language)}</button>
+                  <button className="cosBtn cosBtn--ghost" onClick={() => applyLever(lever)}>{t('simulationApplyLever', language)}</button>
                 </article>
               );})}
             </div>
@@ -737,6 +893,22 @@ export function SimulationScreen() {
             </div>
           </div>
         </>
+      )}
+      {isQuestOpen && (
+        <div className="sim-quest-modal" role="dialog" aria-modal="true" aria-label={t('simulationQuestModalTitle', language)}>
+          <div className="sim-quest-panel stack">
+            <strong>{t('simulationQuestModalTitle', language)}</strong>
+            <ol>
+              <li>{t('simulationQuestStepOne', language)}</li>
+              <li>{t('simulationQuestStepTwo', language)}</li>
+              <li>{t('simulationQuestStepThree', language)}</li>
+            </ol>
+            <div className="preset-row">
+              <button className="cosBtn cosBtn--accent" onClick={createQuestStub}>{t('simulationQuestCreate', language)}</button>
+              <button className="cosBtn cosBtn--ghost" onClick={() => setQuestOpen(false)}>{t('simulationQuestCancel', language)}</button>
+            </div>
+          </div>
+        </div>
       )}
       </div>
     </section>
