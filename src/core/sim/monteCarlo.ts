@@ -5,7 +5,7 @@ import { Distribution, LeverKey, MonteCarloConfig, Percentiles, SimulationResult
 const DEFAULT_RUNS = 10_000;
 const DEFAULT_BATCH = 250;
 
-function percentile(sorted: number[], p: number): number {
+export function quantileSorted(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const index = (sorted.length - 1) * p;
   const floor = Math.floor(index);
@@ -88,9 +88,9 @@ function buildTrajectory(
     const sorted = [...scores].sort((a, b) => a - b);
     return {
       dayOffset: (stepIndex + 1) * dtDays,
-      p10: percentile(sorted, 0.1),
-      p50: percentile(sorted, 0.5),
-      p90: percentile(sorted, 0.9)
+      p10: quantileSorted(sorted, 0.1),
+      p50: quantileSorted(sorted, 0.5),
+      p90: quantileSorted(sorted, 0.9)
     };
   });
 }
@@ -114,11 +114,11 @@ function aggregateResult(
 ): SimulationResult {
   const sortedScores = [...endingScoreValues].sort((a, b) => a - b);
   const scorePercentiles: Percentiles = {
-    p10: percentile(sortedScores, 0.1),
-    p25: percentile(sortedScores, 0.25),
-    p50: percentile(sortedScores, 0.5),
-    p75: percentile(sortedScores, 0.75),
-    p90: percentile(sortedScores, 0.9)
+    p10: quantileSorted(sortedScores, 0.1),
+    p25: quantileSorted(sortedScores, 0.25),
+    p50: quantileSorted(sortedScores, 0.5),
+    p75: quantileSorted(sortedScores, 0.75),
+    p90: quantileSorted(sortedScores, 0.9)
   };
 
   return {

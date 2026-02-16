@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runMonteCarlo } from './monteCarlo';
+import { quantileSorted, runMonteCarlo } from './monteCarlo';
 
 describe('runMonteCarlo deterministic seed', () => {
   it('returns deterministic output for fixed seed', () => {
@@ -104,5 +104,26 @@ describe('runMonteCarlo deterministic seed', () => {
     const highThreshold = runMonteCarlo({ ...common, successThreshold: 140 });
     const lowThreshold = runMonteCarlo({ ...common, successThreshold: 110 });
     expect(lowThreshold.successRatio).toBeGreaterThanOrEqual(highThreshold.successRatio);
+  });
+
+
+  it('calculates quantiles with interpolation', () => {
+    const sorted = [-10, 0, 10, 20, 40];
+    expect(quantileSorted(sorted, 0.1)).toBe(-6);
+    expect(quantileSorted(sorted, 0.5)).toBe(10);
+    expect(quantileSorted(sorted, 0.9)).toBe(32);
+  });
+
+  it('uses success criterion final score >= threshold', () => {
+    const result = runMonteCarlo({
+      runs: 500,
+      horizonMonths: 6,
+      dtDays: 5,
+      baseState: { capital: 100, resilience: 30, momentum: 25, stress: 18 },
+      actionPolicy: () => ({ strategy: 'balance' as const, riskBias: 0.5, uncertaintyBias: 0.4 }),
+      scenarioParams: { seed: 700, uncertainty: 0.5, riskAppetite: 0.5, blackSwanEnabled: true, blackSwanChanceMonthly: 0.03, blackSwanImpact: 1.1 },
+      successThreshold: Number.POSITIVE_INFINITY
+    });
+    expect(result.successRatio).toBe(0);
   });
 });
