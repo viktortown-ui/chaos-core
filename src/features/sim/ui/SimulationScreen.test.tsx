@@ -81,61 +81,24 @@ describe('SimulationScreen', () => {
     vi.stubGlobal('Worker', WorkerMock);
   });
 
-  it('renders outcome, how-to-read and drivers after run', async () => {
+  it('renders mission-first layout and verdict KPI cards', async () => {
     renderSimulation();
+
+    expect(screen.getByRole('heading', { name: 'Миссия' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Oracle Stage')).toBeInTheDocument();
-      expect(screen.getByLabelText('Итог')).toBeInTheDocument();
-      expect(screen.getByText('Как читать график')).toBeInTheDocument();
-      expect(screen.getByText('Почему так вышло (Top-3 драйверов)')).toBeInTheDocument();
-      expect(screen.getByText('Шанс пройти цель')).toBeInTheDocument();
-      expect(screen.getByText('Обычный исход')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Вердикт' })).toBeInTheDocument();
+      expect(screen.getByText('Шанс успеха')).toBeInTheDocument();
       expect(screen.getByText('Плохой исход')).toBeInTheDocument();
+      expect(screen.getByText('Хороший исход')).toBeInTheDocument();
+      expect(screen.getByText('Почему так вышло (Top-3 драйверов)')).toBeInTheDocument();
     });
   });
 
-  it('shows three decision cards and applies best lever', async () => {
+  it('switches objective and updates description', () => {
     renderSimulation();
-    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Дешевле всего')).toBeInTheDocument();
-      expect(screen.getByText('Быстрее всего')).toBeInTheDocument();
-      expect(screen.getByText('Безопаснее всего')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getAllByRole('button', { name: /Применить/ })[0]);
-    expect(screen.getByDisplayValue('111')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Пересчитать' })).toBeInTheDocument();
-  });
-
-
-  it('opens 3-step quest modal', async () => {
-    renderSimulation();
-    fireEvent.click(screen.getByRole('button', { name: /Сделать это квестом/ }));
-    expect(screen.getByRole('dialog', { name: 'Сделать это квестом' })).toBeInTheDocument();
-    expect(screen.getByText(/Шаг 1/)).toBeInTheDocument();
-    expect(screen.getByText(/Шаг 2/)).toBeInTheDocument();
-    expect(screen.getByText(/Шаг 3/)).toBeInTheDocument();
-  });
-
-  it('does not animate hero pulse in reduced-motion', async () => {
-    const rafSpy = vi.fn();
-    vi.stubGlobal('requestAnimationFrame', rafSpy);
-    vi.stubGlobal('cancelAnimationFrame', vi.fn());
-
-    renderSimulation();
-    fireEvent.click(screen.getByRole('button', { name: 'Запустить симуляцию' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Oracle Stage')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /Применить лучший рычаг/ }));
-    expect(document.querySelector('.sim-screen')).toHaveClass('reduce-motion');
-    expect(document.querySelector('.sim-hero')).not.toHaveClass('sim-hero-pulse');
-    expect(rafSpy).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Ипотека' }));
+    expect(screen.getByText('Смотрим, выдержит ли план выплат долгий горизонт.')).toBeInTheDocument();
   });
 });
