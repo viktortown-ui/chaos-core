@@ -44,7 +44,7 @@ describe('simulation view model helpers', () => {
 
 
   it('builds fan quantiles and distribution bars', () => {
-    const fan = buildFanPoints([{ p10: 80, p50: 100, p90: 140 }]);
+    const fan = buildFanPoints([{ dayOffset: 30, p10: 80, p50: 100, p90: 140 }], 12);
     expect(fan[0]).toMatchObject({ month: 1, p25: 90, p75: 120 });
     const bars = buildDistributionBars([10, 20, 30], [5, 10]);
     expect(bars[1]).toMatchObject({ heightPct: 100, edgeLeft: 20, edgeRight: 30 });

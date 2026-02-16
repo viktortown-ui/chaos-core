@@ -27,4 +27,52 @@ describe('runMonteCarlo deterministic seed', () => {
     expect(second.riskEvents).toEqual(first.riskEvents);
     expect(second.endingScore.bins).toEqual(first.endingScore.bins);
   });
+
+  it('preserves percentile order and chance math', () => {
+    const result = runMonteCarlo({
+      runs: 1000,
+      horizonMonths: 12,
+      dtDays: 5,
+      baseState: { capital: 95, resilience: 25, momentum: 24, stress: 17 },
+      actionPolicy: () => ({ strategy: 'balance' as const, riskBias: 0.6, uncertaintyBias: 0.5 }),
+      scenarioParams: { seed: 222, uncertainty: 0.6, riskAppetite: 0.5, blackSwanEnabled: true, blackSwanChanceMonthly: 0.03, blackSwanImpact: 1.1 }
+    });
+
+    expect(result.scorePercentiles.p10).toBeLessThanOrEqual(result.scorePercentiles.p50);
+    expect(result.scorePercentiles.p50).toBeLessThanOrEqual(result.scorePercentiles.p90);
+    const successWorlds = Math.round(result.successRatio * result.runs);
+    expect(result.successRatio).toBeCloseTo(successWorlds / result.runs, 2);
+  });
+
+  it('widens spread when fog is increased', () => {
+    const base = {
+      runs: 1500,
+      horizonMonths: 12,
+      dtDays: 5,
+      baseState: { capital: 100, resilience: 30, momentum: 26, stress: 16 },
+      actionPolicy: () => ({ strategy: 'balance' as const, riskBias: 0.5, uncertaintyBias: 0.4 }),
+      scenarioParams: { seed: 333, uncertainty: 0.2, riskAppetite: 0.5, blackSwanEnabled: true, blackSwanChanceMonthly: 0.03, blackSwanImpact: 1.1 }
+    };
+
+    const lowFog = runMonteCarlo(base);
+    const highFog = runMonteCarlo({ ...base, scenarioParams: { ...base.scenarioParams, seed: 334, uncertainty: 1 } });
+    const spreadLow = lowFog.scorePercentiles.p90 - lowFog.scorePercentiles.p10;
+    const spreadHigh = highFog.scorePercentiles.p90 - highFog.scorePercentiles.p10;
+    expect(spreadHigh).toBeGreaterThan(spreadLow);
+  });
+
+  it('black swan hurts lower tail', () => {
+    const base = {
+      runs: 1500,
+      horizonMonths: 12,
+      dtDays: 5,
+      baseState: { capital: 100, resilience: 30, momentum: 26, stress: 16 },
+      actionPolicy: () => ({ strategy: 'balance' as const, riskBias: 0.6, uncertaintyBias: 0.5 }),
+      scenarioParams: { seed: 444, uncertainty: 0.6, riskAppetite: 0.5, blackSwanEnabled: false, blackSwanChanceMonthly: 0.05, blackSwanImpact: 1.2 }
+    };
+
+    const noSwan = runMonteCarlo(base);
+    const withSwan = runMonteCarlo({ ...base, scenarioParams: { ...base.scenarioParams, seed: 445, blackSwanEnabled: true } });
+    expect(withSwan.scorePercentiles.p10).toBeLessThanOrEqual(noSwan.scorePercentiles.p10);
+  });
 });
