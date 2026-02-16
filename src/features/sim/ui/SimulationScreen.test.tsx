@@ -90,9 +90,9 @@ describe('SimulationScreen', () => {
       expect(screen.getByLabelText('Итог')).toBeInTheDocument();
       expect(screen.getByText('Как читать график')).toBeInTheDocument();
       expect(screen.getByText('Почему так вышло (Top-3 драйверов)')).toBeInTheDocument();
-      expect(screen.getByText('Шанс успеха')).toBeInTheDocument();
-      expect(screen.getByText('Типичный сценарий (обычно)')).toBeInTheDocument();
-      expect(screen.getByText('Жёсткий сценарий (плохие 10%)')).toBeInTheDocument();
+      expect(screen.getByText('Шанс пройти цель')).toBeInTheDocument();
+      expect(screen.getByText('Обычный исход')).toBeInTheDocument();
+      expect(screen.getByText('Плохой исход')).toBeInTheDocument();
     });
   });
 

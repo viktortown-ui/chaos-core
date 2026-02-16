@@ -7,10 +7,11 @@ import { loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '..
 import { SensitivityItem, SimConfigPayload, SimWorkerResponse } from '../worker/protocol';
 import { buildDrivers, buildFanPoints, buildHeadroomChipModel, buildOraclePins, buildRiskDisplayMetric, buildSpreadChipModel, DISCRETE_LEVEL_VALUES, DriverInsight, FanPoint, findFailureWindow, formatAdaptive, formatSignedPercent, formatSignedTenthsAsPercent, heroStatusLabel, nearestDiscreteLevel, predictabilityIndexFromSpread, rankLevers, riskCostLineKey, riskEffectKey, strategicLeverTitleKey, successMeterLabel, uncertaintyEffectKey } from './simulationViewModel';
 
-type PresetKey = 'boost' | 'stabilize' | 'storm' | 'focus' | 'diversify';
+type ScenarioKey = 'layoff' | 'wedding' | 'deal' | 'mortgage' | 'relocation' | 'custom';
+type ObjectiveKey = 'finance' | 'energy' | 'composite' | 'scenario';
 
-interface Preset {
-  key: PresetKey;
+interface ScenarioPreset {
+  key: ScenarioKey;
   strategy: StrategyMode;
   horizonMonths: number;
   uncertainty: number;
@@ -18,25 +19,19 @@ interface Preset {
   blackSwanEnabled: boolean;
   threshold: number;
   tradeoffKey: 'tradeoffBoost' | 'tradeoffStabilize' | 'tradeoffStorm' | 'tradeoffFocus' | 'tradeoffDiversify';
+  icon: string;
+  objective: ObjectiveKey;
 }
 
-const presets: Preset[] = [
-  { key: 'boost', strategy: 'attack', horizonMonths: 12, uncertainty: 0.6, riskAppetite: 0.8, blackSwanEnabled: false, threshold: 145, tradeoffKey: 'tradeoffBoost' },
-  { key: 'stabilize', strategy: 'balance', horizonMonths: 18, uncertainty: 0.4, riskAppetite: 0.4, blackSwanEnabled: true, threshold: 122, tradeoffKey: 'tradeoffStabilize' },
-  { key: 'storm', strategy: 'defense', horizonMonths: 16, uncertainty: 0.8, riskAppetite: 0.2, blackSwanEnabled: true, threshold: 110, tradeoffKey: 'tradeoffStorm' },
-  { key: 'focus', strategy: 'balance', horizonMonths: 10, uncertainty: 0.4, riskAppetite: 0.6, blackSwanEnabled: false, threshold: 126, tradeoffKey: 'tradeoffFocus' },
-  { key: 'diversify', strategy: 'balance', horizonMonths: 24, uncertainty: 0.6, riskAppetite: 0.4, blackSwanEnabled: true, threshold: 118, tradeoffKey: 'tradeoffDiversify' }
+const scenarioPresets: ScenarioPreset[] = [
+  { key: 'layoff', strategy: 'defense', horizonMonths: 12, uncertainty: 0.8, riskAppetite: 0.2, blackSwanEnabled: true, threshold: 108, tradeoffKey: 'tradeoffStorm', icon: '🧯', objective: 'finance' },
+  { key: 'wedding', strategy: 'balance', horizonMonths: 18, uncertainty: 0.4, riskAppetite: 0.4, blackSwanEnabled: false, threshold: 122, tradeoffKey: 'tradeoffStabilize', icon: '💍', objective: 'composite' },
+  { key: 'deal', strategy: 'attack', horizonMonths: 9, uncertainty: 0.6, riskAppetite: 0.8, blackSwanEnabled: true, threshold: 138, tradeoffKey: 'tradeoffBoost', icon: '🤝', objective: 'scenario' },
+  { key: 'mortgage', strategy: 'balance', horizonMonths: 24, uncertainty: 0.5, riskAppetite: 0.3, blackSwanEnabled: true, threshold: 118, tradeoffKey: 'tradeoffFocus', icon: '🏠', objective: 'finance' },
+  { key: 'relocation', strategy: 'balance', horizonMonths: 16, uncertainty: 0.7, riskAppetite: 0.5, blackSwanEnabled: true, threshold: 120, tradeoffKey: 'tradeoffDiversify', icon: '🚚', objective: 'energy' }
 ];
 
 const runsCount = 10_000;
-
-const presetIcons: Record<PresetKey, string> = {
-  boost: '⚡',
-  stabilize: '🛡',
-  storm: '☄',
-  focus: '◎',
-  diversify: '✧'
-};
 
 function outOfTen(value: number): number {
   return Math.round(value * 10);
@@ -405,7 +400,8 @@ export function SimulationScreen() {
   const [strategy, setStrategy] = useState<StrategyMode>('balance');
   const [blackSwanEnabled, setBlackSwanEnabled] = useState(true);
   const [successThreshold, setSuccessThreshold] = useState(120);
-  const [selectedPreset, setSelectedPreset] = useState<PresetKey>('stabilize');
+  const [selectedScenario, setSelectedScenario] = useState<ScenarioKey>('wedding');
+  const [objective, setObjective] = useState<ObjectiveKey>('composite');
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [templates, setTemplates] = useState<SimTemplate[]>([]);
   const [sensitivity, setSensitivity] = useState<SensitivityItem[]>([]);
@@ -504,10 +500,16 @@ export function SimulationScreen() {
     worker.postMessage({ type: 'sensitivity', id: sensitivityId, config: buildConfig() });
   };
 
-  const applyPreset = (presetKey: PresetKey) => {
-    const preset = presets.find((item) => item.key === presetKey);
+  const applyScenarioPreset = (scenarioKey: ScenarioKey) => {
+    if (scenarioKey === "custom") {
+      setSelectedScenario("custom");
+      markDirty();
+      return;
+    }
+    const preset = scenarioPresets.find((item) => item.key === scenarioKey);
     if (!preset) return;
-    setSelectedPreset(presetKey);
+    setSelectedScenario(scenarioKey);
+    setObjective(preset.objective);
     setHorizonMonths(preset.horizonMonths);
     setUncertainty(preset.uncertainty);
     setRiskAppetite(preset.riskAppetite);
@@ -569,7 +571,7 @@ export function SimulationScreen() {
 
   const fanPoints = useMemo(() => buildFanPoints(result?.scoreTrajectory ?? [], horizonMonths), [horizonMonths, result]);
 
-  const selectedTradeoff = presets.find((preset) => preset.key === selectedPreset)?.tradeoffKey ?? 'tradeoffStabilize';
+  const selectedTradeoff = scenarioPresets.find((preset) => preset.key === selectedScenario)?.tradeoffKey ?? 'tradeoffStabilize';
 
   const riskSummary = useMemo(() => {
     if (!result) return null;
@@ -591,7 +593,6 @@ export function SimulationScreen() {
   const thresholdHeadroom = result ? Math.round(result.scorePercentiles.p50 - successThreshold) : null;
   const spread = result ? Math.round(result.scorePercentiles.p90 - result.scorePercentiles.p10) : null;
   const headroomChip = thresholdHeadroom == null ? null : buildHeadroomChipModel(thresholdHeadroom);
-  const missingToGoal = thresholdHeadroom == null ? 0 : Math.max(0, -thresholdHeadroom);
   const spreadChip = spread == null ? null : buildSpreadChipModel(spread);
   const topStrategicLevers = rankLevers(sensitivity).slice(0, 3);
 
@@ -608,34 +609,45 @@ export function SimulationScreen() {
 
   const spreadValue = result ? Math.round(result.scorePercentiles.p90 - result.scorePercentiles.p10) : 0;
   const predictability = predictabilityIndexFromSpread(spreadValue);
-  const resilienceStatusKey = predictability < 40 ? 'simulationResilienceLow' : predictability < 70 ? 'simulationResilienceMedium' : 'simulationResilienceHigh';
-  const kpiMetrics = result && riskSummary ? [
+  const rawMedianScore = result ? Math.round(result.scorePercentiles.p50) : 0;
+  const levelScore = Math.max(0, Math.min(100, rawMedianScore));
+  const kpiMetrics = result ? [
     {
-      labelKey: 'simulationOracleKpiSuccess',
-      value: `${successWorlds}/${result.runs} (${Math.round(result.successRatio * 100)}%)`,
-      hintKey: 'simulationOracleKpiSuccessHint'
+      labelKey: 'simulationKpiGoalChance',
+      value: `${Math.round(result.successRatio * 100)}%`,
+      hintKey: 'simulationKpiGoalChanceHint'
     },
     {
-      labelKey: 'simulationOracleKpiHardScenario',
-      value: formatAdaptive(result.scorePercentiles.p10),
-      hintKey: 'simulationOracleKpiHardScenarioHint'
-    },
-    {
-      labelKey: 'simulationOracleKpiTypicalScenario',
+      labelKey: 'simulationKpiMedian',
       value: formatAdaptive(result.scorePercentiles.p50),
-      hintKey: 'simulationOracleKpiTypicalScenarioHint'
+      hintKey: 'simulationKpiMedianHint'
     },
     {
-      labelKey: 'simulationOracleKpiLightScenario',
+      labelKey: 'simulationKpiWorst10',
+      value: formatAdaptive(result.scorePercentiles.p10),
+      hintKey: 'simulationKpiWorst10Hint'
+    },
+    {
+      labelKey: 'simulationKpiBest10',
       value: formatAdaptive(result.scorePercentiles.p90),
-      hintKey: 'simulationOracleKpiLightScenarioHint'
+      hintKey: 'simulationKpiBest10Hint'
+    },
+    {
+      labelKey: 'simulationKpiFailureWindow',
+      value: failureWindow ? `${failureWindow.fromMonth}–${failureWindow.toMonth} ${t('simulationMonthsShort', language)}` : t('simulationOutcomeBreakpointNone', language),
+      hintKey: 'simulationKpiFailureWindowHint'
+    },
+    {
+      labelKey: 'simulationKpiRiskPrice',
+      value: `${Math.round(spreadValue)}`,
+      hintKey: 'simulationKpiRiskPriceHint'
     },
     {
       labelKey: 'simulationOracleKpiPredictability',
-      value: `${predictability}/100 · ${t(resilienceStatusKey as never, language)}`,
+      value: `${predictability}/100`,
       hintKey: 'simulationOracleKpiPredictabilityHint'
     }
-  ] : [];
+  ] : [];;
   const uncertaintyLevel = nearestDiscreteLevel(uncertainty);
   const riskLevel = nearestDiscreteLevel(riskAppetite);
 
@@ -699,7 +711,8 @@ export function SimulationScreen() {
                   <p className="sim-hero-status">{t(statusKey, language)}</p>
                   <p className="sim-hero-meter">{t(meterLabelKey, language)}</p>
                   <p className="sim-hero-subline">{t(statusSublineKey, language)}</p>
-                  <p className="sim-hero-gap">{missingToGoal > 0 ? `${t('simulationNeedToGoal', language)} ${missingToGoal}` : t('simulationGoalCovered', language)}</p>
+                  <p className="sim-hero-gap">{`${t('simulationNeedToGoal', language)} ${thresholdHeadroom == null ? 0 : thresholdHeadroom}`}</p>
+                  <p className="sim-hero-gap">{t('simulationLevelLabel', language)}: {levelScore}/100</p>
                   <div className="sim-hero-metrics">
                     {headroomChip && (
                       <span className={`cosChip sim-sense-chip sim-sense-chip--${headroomChip.tone}`}>
@@ -750,14 +763,22 @@ export function SimulationScreen() {
             <span className="cosChip">{t('simulationDockSubtitle', language)}</span>
           </div>
           <div className="sim-dock-row" role="group" aria-label={t('simulationLeversDockTitle', language)}>
-            {presets.map((preset) => (
-              <button key={preset.key} className={`cosBtn cosBtn--ghost sim-dock-btn${selectedPreset === preset.key ? ' sim-dock-btn-active' : ''}`} onClick={() => applyPreset(preset.key)}>
-                <span aria-hidden="true">{presetIcons[preset.key]}</span>
-                <span>{t(`preset_${preset.key}` as never, language)}</span>
+            {[...scenarioPresets, { key: "custom", icon: "➕" } as const].map((preset) => (
+              <button key={preset.key} className={`cosBtn cosBtn--ghost sim-dock-btn${selectedScenario === preset.key ? ' sim-dock-btn-active' : ''}`} onClick={() => applyScenarioPreset(preset.key as ScenarioKey)}>
+                <span aria-hidden="true">{preset.icon}</span>
+                <span>{t(`simulationScenario_${preset.key}` as never, language)}</span>
               </button>
             ))}
           </div>
           <p>{t('simulationTradeoff', language)}: {t(selectedTradeoff, language)}</p>
+          <label>{t('simulationObjectiveSelector', language)}
+            <select value={objective} onChange={(e) => { setObjective(e.target.value as ObjectiveKey); markDirty(); }}>
+              <option value="finance">{t('simulationObjective_finance', language)}</option>
+              <option value="energy">{t('simulationObjective_energy', language)}</option>
+              <option value="composite">{t('simulationObjective_composite', language)}</option>
+              <option value="scenario">{t('simulationObjective_scenario', language)}</option>
+            </select>
+          </label>
         </div>
 
         <div className="cosDivider" aria-hidden="true" />
@@ -810,7 +831,7 @@ export function SimulationScreen() {
           <div className="preset-row">
             <button className="cosBtn" onClick={startSimulation}>{isRunning ? t('simulationRunning', language) : needsRecalc ? t('simulationRecalculate', language) : t('simulationRun', language)}</button>
             <button className="cosBtn cosBtn--ghost" onClick={saveCurrentTemplate}>{t('simulationSaveTemplate', language)}</button>
-            <button className="cosBtn cosBtn--ghost" onClick={() => applyPreset('stabilize')}>{t('simulationReset', language)}</button>
+            <button className="cosBtn cosBtn--ghost" onClick={() => applyScenarioPreset('wedding')}>{t('simulationReset', language)}</button>
           </div>
           {templates.length > 0 && <div className="preset-row sim-templates-row">{templates.slice(0, 3).map((template) => <button className="cosBtn cosBtn--ghost" key={template.id} onClick={() => applyTemplate(template)}>{template.name}</button>)}</div>}
           {isRunning && <p>{t('simulationProgress', language)}: {Math.round(progress * 100)}%</p>}
