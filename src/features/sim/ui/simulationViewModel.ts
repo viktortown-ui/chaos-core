@@ -45,9 +45,9 @@ export function togglePin(currentPinned: number | null, tapped: number): number 
   return currentPinned === tapped ? null : tapped;
 }
 
-export function mapRawToHumanIndex(rawScore: number, low: number, high: number): number {
-  const spread = Math.max(1, high - low);
-  const normalized = ((rawScore - low) / spread) * 100;
+export function predictabilityIndexFromSpread(spread: number): number {
+  const safeSpread = Math.max(0, spread);
+  const normalized = 100 - safeSpread * 1.35;
   return Math.round(Math.max(0, Math.min(100, normalized)));
 }
 

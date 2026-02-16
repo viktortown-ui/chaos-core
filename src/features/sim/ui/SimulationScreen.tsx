@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FloatingPortal, offset, shift, useClick, useDismiss, useFloating, useInteractions, useRole } from '@floating-ui/react';
 import { useChaosCore } from '../../../app/providers/ChaosCoreProvider';
 import { SimulationResult, StrategyMode } from '../../../core/sim/types';
 import { useReducedMotion } from '../../../fx/useReducedMotion';
 import { Language, t } from '../../../shared/i18n';
 import { loadSimTemplates, saveBaseline, saveSimTemplate, SimTemplate } from '../../../shared/storage/simStorage';
 import { SensitivityItem, SimConfigPayload, SimWorkerResponse } from '../worker/protocol';
-import { buildDrivers, buildFanPoints, buildHeadroomChipModel, buildOraclePins, buildRiskDisplayMetric, buildSpreadChipModel, DISCRETE_LEVEL_VALUES, DriverInsight, FanPoint, findFailureWindow, formatAdaptive, formatSignedPercent, formatSignedTenthsAsPercent, heroStatusLabel, mapRawToHumanIndex, nearestDiscreteLevel, rankLevers, riskCostLineKey, riskEffectKey, strategicLeverTitleKey, successMeterLabel, uncertaintyEffectKey } from './simulationViewModel';
+import { buildDrivers, buildFanPoints, buildHeadroomChipModel, buildOraclePins, buildRiskDisplayMetric, buildSpreadChipModel, DISCRETE_LEVEL_VALUES, DriverInsight, FanPoint, findFailureWindow, formatAdaptive, formatSignedPercent, formatSignedTenthsAsPercent, heroStatusLabel, nearestDiscreteLevel, predictabilityIndexFromSpread, rankLevers, riskCostLineKey, riskEffectKey, strategicLeverTitleKey, successMeterLabel, uncertaintyEffectKey } from './simulationViewModel';
 
 type PresetKey = 'boost' | 'stabilize' | 'storm' | 'focus' | 'diversify';
 
@@ -121,32 +120,27 @@ function CoreOrb({ reducedMotion, score }: { reducedMotion: boolean; score: numb
 
 type ChartMode = 'line' | 'fan' | 'cloud';
 
-function HelpPopover({ label, text }: { label: string; text: string }) {
-  const [open, setOpen] = useState(false);
-  const { refs, floatingStyles, context } = useFloating({
-    open,
-    onOpenChange: setOpen,
-    middleware: [offset(8), shift({ padding: 8 })]
-  });
-  const click = useClick(context);
-  const dismiss = useDismiss(context);
-  const role = useRole(context, { role: 'dialog' });
-  const { getReferenceProps, getFloatingProps } = useInteractions([click, dismiss, role]);
+interface ActionCompare {
+  source: 'lever' | 'quest';
+  title: string;
+  beforeChance: number;
+  afterChance: number;
+  beforeHeadroom: number;
+  afterHeadroom: number;
+}
 
+function BottomSheetHelp({ title, lines, onClose, language }: { title: string; lines: string[]; onClose: () => void; language: Language }) {
   return (
-    <>
-      <button type="button" ref={refs.setReference} className="sim-help-dot" aria-label={label} {...getReferenceProps()}>
-        ?
-      </button>
-      {open && (
-        <FloatingPortal>
-          <div ref={refs.setFloating} style={floatingStyles} className="sim-tooltip" {...getFloatingProps()}>
-            <strong>{label}</strong>
-            <p>{text}</p>
-          </div>
-        </FloatingPortal>
-      )}
-    </>
+    <div className="sim-bottom-sheet" role="dialog" aria-modal="true" aria-label={title}>
+      <button type="button" className="sim-bottom-sheet__backdrop" onClick={onClose} aria-label={t('simulationHelpClose', language)} />
+      <div className="sim-bottom-sheet__panel stack">
+        <strong>{title}</strong>
+        <ul>
+          {lines.map((line) => <li key={line}>{line}</li>)}
+        </ul>
+        <button type="button" className="cosBtn cosBtn--ghost" onClick={onClose}>{t('simulationHelpClose', language)}</button>
+      </div>
+    </div>
   );
 }
 
@@ -386,19 +380,6 @@ function OutcomeSummary({
   );
 }
 
-function OracleHowToRead({ language }: { language: Language }) {
-  return (
-    <details className="oracle-howto">
-      <summary>{t('simulationHowToReadTitle', language)}</summary>
-      <ul>
-        <li>{t('simulationHowToReadBand', language)}</li>
-        <li>{t('simulationHowToReadLines', language)}</li>
-        <li>{t('simulationHowToReadThreshold', language)}</li>
-      </ul>
-    </details>
-  );
-}
-
 function DriversList({ language, drivers }: { language: Language; drivers: DriverInsight[] }) {
   return (
     <section className="oracle-drivers stack" aria-label={t('simulationDriversTitle', language)}>
@@ -435,6 +416,8 @@ export function SimulationScreen() {
   const [chartPeriod, setChartPeriod] = useState<3 | 6 | 12 | 24 | 'all'>('all');
   const [chartMode, setChartMode] = useState<ChartMode>('fan');
   const [isQuestOpen, setQuestOpen] = useState(false);
+  const [helpSheet, setHelpSheet] = useState<'chart' | 'scenarios' | null>(null);
+  const [actionCompare, setActionCompare] = useState<ActionCompare | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
   const activeIdRef = useRef<string | null>(null);
@@ -558,11 +541,23 @@ export function SimulationScreen() {
 
   const applyLever = (lever: SensitivityItem) => {
     const cfg = lever.nextConfig;
+    const beforeChance = result ? Math.round(result.successRatio * 100) : 0;
+    const beforeHeadroom = result ? Math.round(result.scorePercentiles.p50 - successThreshold) : 0;
     if (typeof cfg.horizonMonths === 'number') setHorizonMonths(cfg.horizonMonths);
     if (typeof cfg.riskAppetite === 'number') setRiskAppetite(cfg.riskAppetite);
     if (typeof cfg.successThreshold === 'number') setSuccessThreshold(cfg.successThreshold);
     if (cfg.strategy) setStrategy(cfg.strategy);
     pulseAndVibrate(() => setHeroPulse(true), reducedMotion);
+    if (result) {
+      setActionCompare({
+        source: 'lever',
+        title: t(lever.labelKey as never, language),
+        beforeChance,
+        afterChance: Math.max(0, Math.min(100, Math.round(beforeChance + lever.successDelta))),
+        beforeHeadroom,
+        afterHeadroom: beforeHeadroom + Math.round(lever.successDelta / 2)
+      });
+    }
     markDirty();
   };
 
@@ -596,6 +591,7 @@ export function SimulationScreen() {
   const thresholdHeadroom = result ? Math.round(result.scorePercentiles.p50 - successThreshold) : null;
   const spread = result ? Math.round(result.scorePercentiles.p90 - result.scorePercentiles.p10) : null;
   const headroomChip = thresholdHeadroom == null ? null : buildHeadroomChipModel(thresholdHeadroom);
+  const missingToGoal = thresholdHeadroom == null ? 0 : Math.max(0, -thresholdHeadroom);
   const spreadChip = spread == null ? null : buildSpreadChipModel(spread);
   const topStrategicLevers = rankLevers(sensitivity).slice(0, 3);
 
@@ -610,8 +606,9 @@ export function SimulationScreen() {
   const failureWindow = useMemo(() => findFailureWindow(filteredFanPoints, successThreshold, horizonMonths), [filteredFanPoints, horizonMonths, successThreshold]);
   const drivers = useMemo(() => buildDrivers(topStrategicLevers), [topStrategicLevers]);
 
-  const resilience = result ? mapRawToHumanIndex(result.scorePercentiles.p50, result.scorePercentiles.p10, result.scorePercentiles.p90) : 0;
-  const resilienceStatusKey = resilience < 40 ? 'simulationResilienceLow' : resilience < 70 ? 'simulationResilienceMedium' : 'simulationResilienceHigh';
+  const spreadValue = result ? Math.round(result.scorePercentiles.p90 - result.scorePercentiles.p10) : 0;
+  const predictability = predictabilityIndexFromSpread(spreadValue);
+  const resilienceStatusKey = predictability < 40 ? 'simulationResilienceLow' : predictability < 70 ? 'simulationResilienceMedium' : 'simulationResilienceHigh';
   const kpiMetrics = result && riskSummary ? [
     {
       labelKey: 'simulationOracleKpiSuccess',
@@ -634,9 +631,9 @@ export function SimulationScreen() {
       hintKey: 'simulationOracleKpiLightScenarioHint'
     },
     {
-      labelKey: 'simulationOracleKpiResilience',
-      value: `${resilience}/100 · ${t(resilienceStatusKey as never, language)}`,
-      hintKey: 'simulationOracleKpiResilienceHint'
+      labelKey: 'simulationOracleKpiPredictability',
+      value: `${predictability}/100 · ${t(resilienceStatusKey as never, language)}`,
+      hintKey: 'simulationOracleKpiPredictabilityHint'
     }
   ] : [];
   const uncertaintyLevel = nearestDiscreteLevel(uncertainty);
@@ -648,11 +645,26 @@ export function SimulationScreen() {
 
   const createQuestStub = () => {
     const summary = `${t('simulationQuestPrefix', language)}: ${t('simulationThreshold', language)} ${successThreshold}, ${t('simulationHorizon', language)} ${horizonMonths}`;
+    const beforeChance = result ? Math.round(result.successRatio * 100) : 0;
+    const beforeHeadroom = result ? Math.round(result.scorePercentiles.p50 - successThreshold) : 0;
+    const nextThreshold = Math.max(80, successThreshold - 5);
+    const nextUncertainty = Math.max(0.2, uncertainty - 0.2);
     setData((current) => ({
       ...current,
       history: [{ id: `quest-${Date.now()}`, kind: 'quest', note: summary, atISO: new Date().toISOString() }, ...current.history]
     }));
+    setSuccessThreshold(nextThreshold);
+    setUncertainty(nextUncertainty);
+    setActionCompare({
+      source: 'quest',
+      title: t('simulationQuestCompareTitle', language),
+      beforeChance,
+      afterChance: Math.max(0, Math.min(100, beforeChance + 4)),
+      beforeHeadroom,
+      afterHeadroom: beforeHeadroom + 5
+    });
     setQuestOpen(false);
+    markDirty();
   };
 
   return (
@@ -660,6 +672,7 @@ export function SimulationScreen() {
       <div className="simBackdrop" aria-hidden="true" />
       <h2>{t('simulationTitle', language)}</h2>
       <div className="cosShell stack">
+        <h3 className="sim-section-title">{t('simulationSectionMission', language)}</h3>
         <div className="sim-inline-intro">
           <p>{t('simulationMeaningLine', language)}</p>
           <details>
@@ -686,6 +699,7 @@ export function SimulationScreen() {
                   <p className="sim-hero-status">{t(statusKey, language)}</p>
                   <p className="sim-hero-meter">{t(meterLabelKey, language)}</p>
                   <p className="sim-hero-subline">{t(statusSublineKey, language)}</p>
+                  <p className="sim-hero-gap">{missingToGoal > 0 ? `${t('simulationNeedToGoal', language)} ${missingToGoal}` : t('simulationGoalCovered', language)}</p>
                   <div className="sim-hero-metrics">
                     {headroomChip && (
                       <span className={`cosChip sim-sense-chip sim-sense-chip--${headroomChip.tone}`}>
@@ -717,6 +731,13 @@ export function SimulationScreen() {
                   <small>{t('simulationMakeQuestSubtext', language)}</small>
                 </button>
               </div>
+              {actionCompare && (
+                <div className="oracle-compare">
+                  <strong>{t('simulationBeforeAfterTitle', language)} · {actionCompare.title}</strong>
+                  <p>{t('simulationExpectedEffectChance', language)}: {actionCompare.beforeChance}% → {actionCompare.afterChance}%</p>
+                  <p>{t('simulationNeedToGoal', language)}: {Math.max(0, -actionCompare.beforeHeadroom)} → {Math.max(0, -actionCompare.afterHeadroom)}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -741,6 +762,7 @@ export function SimulationScreen() {
 
         <div className="cosDivider" aria-hidden="true" />
 
+        <h3 className="sim-section-title">{t('simulationSectionLaunch', language)}</h3>
         <div className="stack">
           <div className="cosHudRow">
             <label>{t('simulationHorizonForecast', language)} <span className="cosChip sim-value-pill">{horizonMonths} {t('simulationMonthsShort', language)}</span>
@@ -754,11 +776,11 @@ export function SimulationScreen() {
           </div>
 
           <div className="cosHudRow">
-            <label>{t('simulationFogLabel', language)} <span className="cosChip sim-value-pill">{t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}</span> <HelpPopover label={t('simulationFogLabel', language)} text={t('simulationUncertaintyTooltip', language)} />
+            <label>{t('simulationFogLabel', language)} <span className="cosChip sim-value-pill">{t(`simulationUncertaintyLevel${uncertaintyLevel + 1}` as never, language)}</span>
               <input type="range" min={0} max={4} step={1} value={uncertaintyLevel} onChange={(e) => { setUncertainty(DISCRETE_LEVEL_VALUES[Number(e.target.value)]); markDirty(); }} />
               <small>{t('simulationFogHelper', language)} {t(uncertaintyEffectKey(uncertaintyLevel), language)}</small>
             </label>
-            <label>{t('simulationCourageLabel', language)} <span className="cosChip sim-value-pill">{t(`simulationRiskLevel${riskLevel + 1}` as never, language)}</span> <HelpPopover label={t('simulationCourageLabel', language)} text={t('simulationRiskTooltip', language)} />
+            <label>{t('simulationCourageLabel', language)} <span className="cosChip sim-value-pill">{t(`simulationRiskLevel${riskLevel + 1}` as never, language)}</span>
               <input type="range" min={0} max={4} step={1} value={riskLevel} onChange={(e) => { setRiskAppetite(DISCRETE_LEVEL_VALUES[Number(e.target.value)]); markDirty(); }} />
               <small>{t('simulationCourageHelper', language)} {t(riskEffectKey(riskLevel), language)}</small>
             </label>
@@ -797,6 +819,7 @@ export function SimulationScreen() {
       {result && (
         <>
           <div className="cosDivider" aria-hidden="true" />
+          <h3 className="sim-section-title">{t('simulationSectionVerdict', language)}</h3>
           <section className="oracle-theater stack oracle-stage" aria-label={t('simulationOracleTheater', language)}>
             <div className="sim-chart-head">
               <strong>{t('simulationOracleStageTitle', language)}</strong>
@@ -848,7 +871,10 @@ export function SimulationScreen() {
               mode={chartMode}
               language={language}
             />
-            <OracleHowToRead language={language} />
+            <div className="oracle-help-row">
+              <button type="button" className="cosBtn cosBtn--ghost" onClick={() => setHelpSheet('chart')}>{t('simulationHowToReadTitle', language)}</button>
+              <button type="button" className="cosBtn cosBtn--ghost" onClick={() => setHelpSheet('scenarios')}>{t('simulationScenarioMeaningTitle', language)}</button>
+            </div>
             <div className="oracle-kpi-strip">
               {kpiMetrics.map((metric) => (
                 <article key={metric.labelKey} className="oracle-kpi-chip">
@@ -858,7 +884,10 @@ export function SimulationScreen() {
                 </article>
               ))}
             </div>
+            <h4 className="sim-section-title">{t('simulationSectionDrivers', language)}</h4>
             <DriversList language={language} drivers={drivers} />
+
+            <h4 className="sim-section-title">{t('simulationSectionLevers', language)}</h4>
 
             <div className="lever-cards-grid oracle-command-grid">
               {topStrategicLevers.map((lever, index) => {
@@ -876,6 +905,7 @@ export function SimulationScreen() {
             </div>
           </section>
 
+          <h3 className="sim-section-title">{t('simulationSectionAdvanced', language)}</h3>
           <details className="stack sim-details">
             <summary>{t('simulationAdvanced', language)}</summary>
             <p>{t('simulationAdvancedPercentilesHelp', language)}</p>
@@ -894,6 +924,17 @@ export function SimulationScreen() {
           </div>
         </>
       )}
+      {helpSheet && (
+        <BottomSheetHelp
+          language={language}
+          title={helpSheet === 'chart' ? t('simulationHowToReadTitle', language) : t('simulationScenarioMeaningTitle', language)}
+          lines={helpSheet === 'chart'
+            ? [t('simulationHowToReadBand', language), t('simulationHowToReadLines', language), t('simulationHowToReadThreshold', language)]
+            : [t('simulationScenarioMeaningOne', language), t('simulationScenarioMeaningTwo', language), t('simulationScenarioMeaningThree', language)]}
+          onClose={() => setHelpSheet(null)}
+        />
+      )}
+      <h3 className="sim-section-title">{t('simulationSectionQuest', language)}</h3>
       {isQuestOpen && (
         <div className="sim-quest-modal" role="dialog" aria-modal="true" aria-label={t('simulationQuestModalTitle', language)}>
           <div className="sim-quest-panel stack">

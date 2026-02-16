@@ -61,6 +61,21 @@ describe('runMonteCarlo deterministic seed', () => {
     expect(spreadHigh).toBeGreaterThan(spreadLow);
   });
 
+  it('courage shifts median upward', () => {
+    const base = {
+      runs: 1800,
+      horizonMonths: 12,
+      dtDays: 5,
+      baseState: { capital: 100, resilience: 30, momentum: 26, stress: 16 },
+      actionPolicy: () => ({ strategy: 'balance' as const, riskBias: 0.4, uncertaintyBias: 0.5 }),
+      scenarioParams: { seed: 555, uncertainty: 0.5, riskAppetite: 0.2, blackSwanEnabled: true, blackSwanChanceMonthly: 0.03, blackSwanImpact: 1.1 }
+    };
+
+    const lowCourage = runMonteCarlo(base);
+    const highCourage = runMonteCarlo({ ...base, scenarioParams: { ...base.scenarioParams, seed: 556, riskAppetite: 1 } });
+    expect(highCourage.scorePercentiles.p50).toBeGreaterThanOrEqual(lowCourage.scorePercentiles.p50);
+  });
+
   it('black swan hurts lower tail', () => {
     const base = {
       runs: 1500,
@@ -74,5 +89,20 @@ describe('runMonteCarlo deterministic seed', () => {
     const noSwan = runMonteCarlo(base);
     const withSwan = runMonteCarlo({ ...base, scenarioParams: { ...base.scenarioParams, seed: 445, blackSwanEnabled: true } });
     expect(withSwan.scorePercentiles.p10).toBeLessThanOrEqual(noSwan.scorePercentiles.p10);
+  });
+
+  it('lower threshold raises success chance', () => {
+    const common = {
+      runs: 1800,
+      horizonMonths: 12,
+      dtDays: 5,
+      baseState: { capital: 98, resilience: 28, momentum: 24, stress: 18 },
+      actionPolicy: () => ({ strategy: 'balance' as const, riskBias: 0.5, uncertaintyBias: 0.5 }),
+      scenarioParams: { seed: 666, uncertainty: 0.5, riskAppetite: 0.5, blackSwanEnabled: true, blackSwanChanceMonthly: 0.03, blackSwanImpact: 1.1 }
+    };
+
+    const highThreshold = runMonteCarlo({ ...common, successThreshold: 140 });
+    const lowThreshold = runMonteCarlo({ ...common, successThreshold: 110 });
+    expect(lowThreshold.successRatio).toBeGreaterThanOrEqual(highThreshold.successRatio);
   });
 });
